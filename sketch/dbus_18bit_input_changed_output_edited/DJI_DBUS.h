@@ -32,6 +32,7 @@ class DJI_DBUS
 		uint8_t  failsafe_status;
 		int sbus_passthrough;
 		int toChannels;
+    uint32_t updatetime;
 		void begin();
 		int16_t Channel(uint8_t ch);
 		uint8_t DigiChannel(uint8_t ch);

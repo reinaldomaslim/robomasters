@@ -31,6 +31,7 @@ static int shoot = 0;
 static unsigned int lastChange = millis();
 const unsigned int chgTime = 100;
 int shooting(int);
+uint32_t updatetime = 0;
 
 //channel define
 #define LEFT_UD 3
@@ -138,7 +139,9 @@ int shooting(int cmd){
   
   unsigned int curr = millis();
   if (cmd==1){
-    if (shoot==0 && (curr - lastChange) > chgTime){
+    if (shoot==3 && (curr - lastChange) > chgTime){
+      shoot = 0; lastChange = curr; }
+    else if (shoot==0 && (curr - lastChange) > chgTime){
       shoot = 1; lastChange = curr; }
     else if (shoot==1 && (curr - lastChange) > chgTime){
       shoot = 4; lastChange = curr; }
@@ -166,6 +169,7 @@ int shooting(int cmd){
 }
 
 void joy_cb( const sensor_msgs::Joy& joy){
+  updatetime = millis();
   //left button up means auto
   //sequence : left  right_UD  right_LR
     ROS_Output[LEFT_LR] = (uint16_t)(joy.buttons[2]);
@@ -282,7 +286,7 @@ void write18BitsDbusData(){
   //00 04 20 00 01 58 00 00 00 00 00 00 00 00 00 00 00 00 adjusted    
   
   DBus_Final_Output[CHANNEL_R] = DBus_Output[CHANNEL_R];
-  if(DBus_Output[CHANNEL_L] == CHANNEL_UP){
+  if(DBus_Output[CHANNEL_L] == CHANNEL_UP && currTime - updatetime < 500){
     //auto mode
     DBus_Final_Output[LEFT_UD] = ROS_Output[LEFT_UD];
     DBus_Final_Output[LEFT_LR] = ROS_Output[LEFT_LR];
@@ -299,9 +303,11 @@ void write18BitsDbusData(){
   }
   
   //add safety system
-  if(DBus_Output[CHANNEL_L] == 0||DBus_Output[CHANNEL_R]==0){  
+  if(currTime - dBus.updatetime > 500 || DBus_Output[CHANNEL_L] == 0||DBus_Output[CHANNEL_R]==0){  
+    DBus_Output[CHANNEL_L] = CHANNEL_MID;
     DBus_Final_Output[CHANNEL_L] = shooting(0);
-    DBus_Final_Output[CHANNEL_R] = CHANNEL_MID;
+    if (shoot==0) DBus_Final_Output[CHANNEL_R] = CHANNEL_MID;
+    else DBus_Final_Output[CHANNEL_R] = CHANNEL_UP;
     DBus_Final_Output[LEFT_LR] = 1024;
     DBus_Final_Output[RIGHT_UD] = 1024;
     DBus_Final_Output[RIGHT_LR] = 1024;

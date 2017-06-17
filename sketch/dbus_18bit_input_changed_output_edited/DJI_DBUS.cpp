@@ -173,6 +173,7 @@ void DJI_DBUS::FeedLine(void){
           if (inBuffer[6]==0x00 && inBuffer[17] == 0x00){
             memcpy(sbusData,inBuffer,18);
             toChannels = 1;
+            updatetime = millis();
             break;
           }
       }else{
