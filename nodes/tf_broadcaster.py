@@ -29,7 +29,7 @@ class TfBroadcaster(object):
             br = tf.TransformBroadcaster()
             #laser tf
             br.sendTransform((0.0, 0.0, 0),
-                             tf.transformations.quaternion_from_euler(0, math.pi, math.pi),
+                             tf.transformations.quaternion_from_euler(0, 0, math.pi),
                              rospy.Time.now(),
                              "laser",
                              "base_link")

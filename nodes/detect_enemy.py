@@ -25,7 +25,10 @@ from collections import Counter
 class FindEnemy(object):
     x0, y0, yaw0= 0, 0, 0
     currentScan=LaserScan()
-    box_length=0.2
+    lookback=2 #lookback to the previous scans, if 0 means yolo
+    radius=2 #radius for detections, rplidar max is 6m
+    counter=0
+    grid=[]
 
     def __init__(self, nodename):
         rospy.init_node(nodename, anonymous=False)
@@ -34,7 +37,7 @@ class FindEnemy(object):
 
         rospy.Subscriber("/odometry", Odometry, self.odom_callback, queue_size = 50)
         rospy.Subscriber("/scan", LaserScan, self.scan_callback, queue_size = 50)
-        self.enemy_pose_pub=rospy.Publisher("/enemy", PoseStamped, queue_size=10)
+        #self.enemy_pose_pub=rospy.Publisher("/enemy", PoseStamped, queue_size=10)
 
         rate=rospy.Rate(10)
     
@@ -44,37 +47,35 @@ class FindEnemy(object):
             rate.sleep()
 
     def scan_callback(self, msg):
-        window_length=3
-        resolution=0.02
-        size=window_length/resolution
-        mid_point=int(size/2)
 
-        grid=[]
+        if self.counter>self.lookback:
+            self.counter=0
+        if self.counter==0:
+            self.grid=[]
 
         for i in range(len(msg.ranges)):
-            if msg.ranges[i]<window_length/2:
+            if msg.ranges[i]<self.radius:
                 theta=i*msg.angle_increment#-math.pi/4
                 d=msg.ranges[i]
                 x=d*math.cos(theta)
                 y=d*math.sin(theta)
-                grid.append([x, y])
+                self.grid.append([x, y])
                 
         #print(grid)
-        self.enemy_position=self.detect_enemy(grid, resolution, window_length/2)
+        enemy_position=self.detect_enemy(self.grid)
         #print(self.enemy_position)
-
+        self.print_marker(enemy_position)
         #self.print_marker([[0, 1]])
-        self.print_marker(self.enemy_position)
+        
 
-    def detect_enemy(self, grid, resolution, origin):
-        msg=PoseStamped()
+    def detect_enemy(self, grid):
+        # msg=PoseStamped()
         #origin=int(grid.shape[0]/2)
         #X=normalize(grid)
         
         #this line takes longest time to run 
         #D = manhattan_distances(frontiers_array, frontiers_array)
         X = StandardScaler().fit_transform(grid)
-        print(X)
         db = DBSCAN(eps=0.5, min_samples=10).fit(X)
         #db = DBSCAN(eps=0.5, min_samples=5, algorithm='ball_tree', metric='haversine').fit(X)
         
@@ -96,17 +97,17 @@ class FindEnemy(object):
 
             pos_x=-center[0][0]
             pos_y=center[0][1]
-            cluster_centers.append([pos_x, pos_y])
+            cluster_centers.append([-pos_x, pos_y])
 
 
-            msg.header.frame_id="odom"
-            direction=math.atan2(self.y0-pos_y, self.x0-pos_x)
-            msg.pose.position.x = pos_x
-            msg.pose.position.y = pos_y
-            q_angle = quaternion_from_euler(0, 0, direction)
-            msg.pose.orientation = Quaternion(*q_angle)
-            self.enemy_pose_pub.publish(msg)
-
+            # msg.header.frame_id="odom"
+            # direction=math.atan2(self.y0-pos_y, self.x0-pos_x)
+            # msg.pose.position.x = pos_x
+            # msg.pose.position.y = pos_y
+            # q_angle = quaternion_from_euler(0, 0, direction)
+            # msg.pose.orientation = Quaternion(*q_angle)
+            # self.enemy_pose_pub.publish(msg)
+        
 
         return cluster_centers
 
@@ -126,7 +127,7 @@ class FindEnemy(object):
             p.z=0
 
             self.markers.points.append(p)
-            self.markers_pub.publish(self.markers)
+        self.markers_pub.publish(self.markers)
 
 
 
@@ -140,7 +141,7 @@ class FindEnemy(object):
         marker_color = {'r': 0.7, 'g': 0.5, 'b': 1.0, 'a': 1.0}
 
         # Define a marker publisher.
-        self.markers_pub = rospy.Publisher('markers_marker', Marker, queue_size=5)
+        self.markers_pub = rospy.Publisher('/enemy_yolo', Marker, queue_size=5)
 
         # Initialize the marker points list.
         self.markers = Marker()
@@ -158,7 +159,7 @@ class FindEnemy(object):
         self.markers.color.b = marker_color['b']
         self.markers.color.a = marker_color['a']
 
-        self.markers.header.frame_id = 'odom'
+        self.markers.header.frame_id = 'map'
         self.markers.header.stamp = rospy.Time.now()
         self.markers.points = list()
 

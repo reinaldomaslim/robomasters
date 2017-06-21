@@ -14,7 +14,7 @@ import cv2
 
 from actionlib_msgs.msg import *
 from geometry_msgs.msg import Pose, Point, Quaternion, Twist, PoseStamped
-from sensor_msgs.msg import RegionOfInterest, CameraInfo, LaserScan
+from sensor_msgs.msg import RegionOfInterest, CameraInfo, LaserScan, Joy
 from nav_msgs.msg import Odometry
 from tf.transformations import quaternion_from_euler, euler_from_quaternion
 from visualization_msgs.msg import Marker
@@ -75,22 +75,29 @@ class BaseDodge(object):
         rospy.init_node(nodename, anonymous=False)
     
         rospy.Subscriber("/odometry", Odometry, self.odom_callback, queue_size = 50)
-        rospy.Subscriber("/enemy", PoseStamped, self.enemy_callback, queue_size = 50)
+        rospy.Subscriber("/enemy_yolo", Marker, self.enemy_callback, queue_size = 50)
         self.cmd_vel_pub=rospy.Publisher("/vel_cmd", Joy, queue_size=10)
+
+        #self.initMarker()
 
         rate=rospy.Rate(10)
     
         while not rospy.is_shutdown():
             
-            if len(clustered_enemy_pos)==0:
+            if len(self.clustered_enemy_pos)==0:
                 #if none enemy around, stop
                 self.stop()
-            elif len(clustered_enemy_pos)==1:
+                print("none")
+            elif len(self.clustered_enemy_pos)==1:
                 #if only one, active dodging 
                 self.active_dodge()
+                print("enemy detected")
+                print(len(self.clustered_enemy_pos))
+                
             else:
                 #more than one, passive dodge
-                self.passive_dodge()
+                #self.passive_dodge()
+                print("passive dodge")
 
             rate.sleep()
 
@@ -106,8 +113,11 @@ class BaseDodge(object):
         #rotate to face target
         heading=math.atan2(target[1]-self.y0, target[0]-self.x0)
         heading_threshold=5*math.pi/180
+        difference=abs(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading)))
 
-        if abs(self.yaw0-heading)>heading_threshold:
+        if difference>heading_threshold:
+            print("rotate")
+            print(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading))*180/math.pi)
             self.rotate(heading)
         else:
             d=0.2
@@ -116,6 +126,7 @@ class BaseDodge(object):
             #direction to the right
             beta2=heading-math.pi/2
 
+            #predict position a timestep ahead
             pred1=[self.x0+d*math.cos(beta1), self.y0+d*math.sin(beta1)]
             pred2=[self.x0+d*math.cos(beta2), self.y0+d*math.sin(beta2)]
 
@@ -144,6 +155,7 @@ class BaseDodge(object):
         self.t += 1
 
         if self.inside_arena([ref_x, ref_y])==True:
+            #if target is inside arena
             self.translate(ref_x, ref_y, 0)
 
     def x_plot(self, t):
@@ -261,7 +273,7 @@ class BaseDodge(object):
         elif angular_vel < -self.ang_vel_thres:
             angular_vel = -self.ang_vel_thres
 
-        theta = self.bias - angular_vel
+        theta = int(self.bias - angular_vel)
 
         msg.buttons = [self.bias, theta, self.bias]
 
@@ -272,37 +284,42 @@ class BaseDodge(object):
 
 
     def enemy_callback(self, msg):
-        #size of stash
-        n_stash=30
-        #for a detected edge, add it into the list. If list is full, replace the first element.
-        if len(self.enemy_pos)==n_edge:
-            #remove the first element
-            del self.enemy_pos[0]
 
-        _, _, yaw_angle = euler_from_quaternion((msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w))
-        #4print(self.get_heading(yaw_angle))
-        self.enemy_pos.append([msg.pose.position.x, msg.pose.position.y])
-        
-        #perform clustering to enemy
-        X=np.asarray(self.enemy_pos)
-        db = DBSCAN(eps=0.5, min_samples=5).fit(X)
-        
-        core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
-        core_samples_mask[db.core_sample_indices_] = True
-        labels = db.labels_
-        
-        n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
-        if n_clusters_==0:
-            return
-
-        clusters = [X[labels == i] for i in range(n_clusters_)]
         self.clustered_enemy_pos=[]
+        for point in msg.points:
+            self.clustered_enemy_pos.append([point.x, point.y])
 
-        for i in range(len(clusters)):
-            position_kmeans=KMeans(n_clusters=1).fit(clusters[i])
-            position_center=position_kmeans.cluster_centers_
-            #print(position_center)
-            self.clustered_enemy_pos.append(position_center[0])
+        # #size of stash
+        # n_stash=30
+        # #for a detected edge, add it into the list. If list is full, replace the first element.
+        # if len(self.enemy_pos)==n_stash:
+        #     #remove the first element
+        #     del self.enemy_pos[0]
+
+        # _, _, yaw_angle = euler_from_quaternion((msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w))
+        # #4print(self.get_heading(yaw_angle))
+        # self.enemy_pos.append([msg.pose.position.x, msg.pose.position.y])
+        
+        # #perform clustering to enemy
+        # X=np.asarray(self.enemy_pos)
+        # db = DBSCAN(eps=0.5, min_samples=5).fit(X)
+        
+        # core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
+        # core_samples_mask[db.core_sample_indices_] = True
+        # labels = db.labels_
+        
+        # n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+        # if n_clusters_==0:
+        #     return
+
+        # clusters = [X[labels == i] for i in range(n_clusters_)]
+        # self.clustered_enemy_pos=[]
+
+        # for i in range(len(clusters)):
+        #     position_kmeans=KMeans(n_clusters=1).fit(clusters[i])
+        #     position_center=position_kmeans.cluster_centers_
+        #     #print(position_center)
+        #     self.clustered_enemy_pos.append(position_center[0])
 
 
 
@@ -311,6 +328,55 @@ class BaseDodge(object):
         self.y0 = msg.pose.pose.position.y
         _, _, self.yaw0 = euler_from_quaternion((msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w))
         self.odom_received = True
+
+    def print_marker(self, mark):
+        self.markers.points=list()
+        if mark is None:
+            return
+
+        for x in mark:
+            #markerList store points wrt 2D world coordinate
+            
+            p=Point()
+
+            p.x=x[0]
+            p.y=x[1]
+            p.z=0
+
+            self.markers.points.append(p)
+        self.markers_pub.publish(self.markers)
+
+    def initMarker(self):
+        # Set up our waypoint markers
+        print("initializing markers")
+        marker_scale = 0.2
+        marker_lifetime = 0  # 0 is forever
+        marker_ns = 'markers'
+        marker_id = 0
+        marker_color = {'r': 0.7, 'g': 0.5, 'b': 1.0, 'a': 1.0}
+
+        # Define a marker publisher.
+        self.markers_pub = rospy.Publisher('clustered_enemy', Marker, queue_size=5)
+
+        # Initialize the marker points list.
+        self.markers = Marker()
+        self.markers.ns = marker_ns
+        self.markers.id = marker_id
+        # self.markers.type = Marker.ARROW
+        self.markers.type = Marker.CUBE_LIST
+        self.markers.action = Marker.ADD
+        self.markers.lifetime = rospy.Duration(marker_lifetime)
+        self.markers.scale.x = marker_scale
+        self.markers.scale.y = marker_scale
+        self.markers.scale.z = marker_scale
+        self.markers.color.r = marker_color['r']
+        self.markers.color.g = marker_color['g']
+        self.markers.color.b = marker_color['b']
+        self.markers.color.a = marker_color['a']
+
+        self.markers.header.frame_id = 'odom'
+        self.markers.header.stamp = rospy.Time.now()
+        self.markers.points = list()
   
 
 if __name__ == '__main__':
