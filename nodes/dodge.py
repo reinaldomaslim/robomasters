@@ -108,49 +108,95 @@ class BaseDodge(object):
         self.cmd_vel_pub.publish(msg)
 
     def active_dodge(self):
+        heading_threshold=5*math.pi/180
 
-        if len(self.clustered_enemy_pos)==2:
+        if len(self.clustered_enemy_pos)==1:
+
+            target=self.clustered_enemy_pos[0]
+
+            #rotate to face target
+            heading=math.atan2(target[1]-self.y0, target[0]-self.x0)
+
+            difference=abs(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading)))
+
+            if difference>heading_threshold:
+                print("rotate")
+                print(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading))*180/math.pi)
+                self.rotate(heading)
+            else:
+                d=0.2
+                #direction to the left
+                beta1=heading+math.pi/2
+                #direction to the right
+                beta2=heading-math.pi/2
+
+                #predict position a timestep ahead
+                pred1=[self.x0+d*math.cos(beta1), self.y0+d*math.sin(beta1)]
+                pred2=[self.x0+d*math.cos(beta2), self.y0+d*math.sin(beta2)]
+
+                if self.inside_arena(pred1)==True and self.inside_arena(pred2)==True:
+                    #go to preferred direction
+                    if self.isleft==True:
+                        self.translate(pred1[0], pred1[1], heading)
+                    else:
+                        self.translate(pred2[0], pred2[1], heading)
+
+                elif self.inside_arena(pred1)==True and self.inside_arena(pred2)==False:
+                        self.translate(pred1[0], pred1[1], heading)
+                        self.isleft=True
+                elif self.inside_arena(pred1)==False and self.inside_arena(pred2)==True:
+                        self.translate(pred2[0], pred2[1], heading)
+                        self.isleft=False
+                else:
+                    #stuck in corner, translate to origin
+                    self.translate(self, 0, 0, self.yaw0) 
+
+        elif len(self.clustered_enemy_pos)==2:
             target=np.average(np.asarray(self.clustered_enemy_pos))
 
+            target1=self.clustered_enemy_pos[0]
+            target2=self.clustered_enemy_pos[1]
 
-        target=self.clustered_enemy_pos[0]
+            heading1=math.atan2(target1[1]-self.y0, target1[0]-self.x0)
+            heading2=math.atan2(target2[1]-self.y0, target2[0]-self.x0)
 
-        #rotate to face target
-        heading=math.atan2(target[1]-self.y0, target[0]-self.x0)
-        heading_threshold=5*math.pi/180
-        difference=abs(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading)))
+            heading=(heading1+heading2)/2
+            difference=abs(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading)))
 
-        if difference>heading_threshold:
-            print("rotate")
-            print(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading))*180/math.pi)
-            self.rotate(heading)
-        else:
-            d=0.2
-            #direction to the left
-            beta1=heading+math.pi/2
-            #direction to the right
-            beta2=heading-math.pi/2
-
-            #predict position a timestep ahead
-            pred1=[self.x0+d*math.cos(beta1), self.y0+d*math.sin(beta1)]
-            pred2=[self.x0+d*math.cos(beta2), self.y0+d*math.sin(beta2)]
-
-            if self.inside_arena(pred1)==True and self.inside_arena(pred2)==True:
-                #go to preferred direction
-                if self.isleft==True:
-                    self.translate(pred1[0], pred1[1], heading)
-                else:
-                    self.translate(pred2[0], pred2[1], heading)
-
-            elif self.inside_arena(pred1)==True and self.inside_arena(pred2)==False:
-                    self.translate(pred1[0], pred1[1], heading)
-                    self.isleft=True
-            elif self.inside_arena(pred1)==False and self.inside_arena(pred2)==True:
-                    self.translate(pred2[0], pred2[1], heading)
-                    self.isleft=False
+            if difference>heading_threshold:
+                print("rotate")
+                print(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading))*180/math.pi)
+                self.rotate(heading)
             else:
-                #stuck in corner, translate to origin
-                self.translate(self, 0, 0, self.yaw0) 
+                d=0.2
+                #direction to the left
+                beta1=heading+math.pi/2
+                #direction to the right
+                beta2=heading-math.pi/2
+
+                #predict position a timestep ahead
+                pred1=[self.x0+d*math.cos(beta1), self.y0+d*math.sin(beta1)]
+                pred2=[self.x0+d*math.cos(beta2), self.y0+d*math.sin(beta2)]
+
+                if self.inside_arena(pred1)==True and self.inside_arena(pred2)==True:
+                    #go to preferred direction
+                    if self.isleft==True:
+                        self.translate(pred1[0], pred1[1], heading)
+                    else:
+                        self.translate(pred2[0], pred2[1], heading)
+
+                elif self.inside_arena(pred1)==True and self.inside_arena(pred2)==False:
+                        self.translate(pred1[0], pred1[1], heading)
+                        self.isleft=True
+                elif self.inside_arena(pred1)==False and self.inside_arena(pred2)==True:
+                        self.translate(pred2[0], pred2[1], heading)
+                        self.isleft=False
+                else:
+                    #stuck in corner, translate to origin
+                    self.translate(self, 0, 0, self.yaw0) 
+
+
+
 
 
     def passive_dodge(self):

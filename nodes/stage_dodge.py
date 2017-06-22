@@ -31,28 +31,29 @@ class BaseDodge(object):
 
     ## PID constants
     del_T = 100.0   # time step in ms
-    p_ang = 450.0
+    p_ang = 5.0
     i_ang = 0.0
-    d_ang = 250.0
-    p_x = 250.0
-    i_x = 0.6
-    d_x = 200.0
+    d_ang = 200.0
+    p_x = 5.0
+    i_x = 0.0
+    d_x = 100.0
 
-    p_y = 240.0
-    i_y = 0.9
+    p_y = 5.0
+    i_y = 0.0
     d_y = 200.0
 
-    lin_vel_thres = 350.0 # max 660
-    ang_vel_thres = 130.0 # max 660
-    bias = 1024.0
+    lin_vel_thres = 3.0 # max 660
+    ang_vel_thres = 5.0 # max 660
+    bias = 0.0
+    angular_bias = 3.1416 / 2.;
     pre_ang_error = 0.0
     pre_x_error = 0.0
     pre_y_error = 0.0
     ang_integral = 0.0
     x_integral = 0.0
     y_integral = 0.0
-    lin_integral_threshold = 50.0
-    ang_integral_threshold = 50.0
+    lin_integral_threshold = 5.0
+    ang_integral_threshold = 5.0
 
     # path function parameters
     T_step =100.0   #time step in ms, 10Hz
@@ -64,8 +65,7 @@ class BaseDodge(object):
     Ly = 0.0
     t=0
 
-    #bias of controller
-    bias=1024
+
 
     #preferred direction of active dodging
     isleft=True
@@ -74,16 +74,18 @@ class BaseDodge(object):
     def __init__(self, nodename):
         rospy.init_node(nodename, anonymous=False)
     
-        rospy.Subscriber("/odometry", Odometry, self.odom_callback, queue_size = 50)
-        rospy.Subscriber("/enemy_yolo", Marker, self.enemy_callback, queue_size = 50)
-        self.cmd_vel_pub=rospy.Publisher("/vel_cmd", Joy, queue_size=10)
+        rospy.Subscriber("robot_0/odom", Odometry, self.odom_callback, queue_size = 50)
+        rospy.Subscriber("robot_1/odom", Odometry, self.enemy_callback, queue_size = 50)
+        #rospy.Subscriber("/enemy_yolo", Marker, self.enemy_callback, queue_size = 50)
+        self.cmd_vel_pub=rospy.Publisher("robot_0/cmd_vel", Twist, queue_size=10)
 
         #self.initMarker()
 
         rate=rospy.Rate(10)
     
         while not rospy.is_shutdown():
-            
+
+                
             if len(self.clustered_enemy_pos)==0:
                 #if none enemy around, stop
                 self.stop()
@@ -103,8 +105,7 @@ class BaseDodge(object):
 
 
     def stop(self):
-        msg=Joy()
-        msg.buttons = [self.bias, self.bias, self.bias]
+        msg=Twist()
         self.cmd_vel_pub.publish(msg)
 
     def active_dodge(self):
@@ -117,15 +118,17 @@ class BaseDodge(object):
 
         #rotate to face target
         heading=math.atan2(target[1]-self.y0, target[0]-self.x0)
-        heading_threshold=5*math.pi/180
+        heading_threshold=50*math.pi/180
         difference=abs(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading)))
 
         if difference>heading_threshold:
+
             print("rotate")
             print(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading))*180/math.pi)
             self.rotate(heading)
         else:
-            d=0.2
+            print("translate")
+            d=0.3
             #direction to the left
             beta1=heading+math.pi/2
             #direction to the right
@@ -135,22 +138,25 @@ class BaseDodge(object):
             pred1=[self.x0+d*math.cos(beta1), self.y0+d*math.sin(beta1)]
             pred2=[self.x0+d*math.cos(beta2), self.y0+d*math.sin(beta2)]
 
+            heading1=math.atan2(target[1]-pred1[1], target[0]-pred1[0])
+            heading2=math.atan2(target[1]-pred2[1], target[0]-pred2[0])
+
             if self.inside_arena(pred1)==True and self.inside_arena(pred2)==True:
                 #go to preferred direction
                 if self.isleft==True:
-                    self.translate(pred1[0], pred1[1], heading)
+                    self.translate(pred1[0], pred1[1], heading1)
                 else:
-                    self.translate(pred2[0], pred2[1], heading)
+                    self.translate(pred2[0], pred2[1], heading2)
 
             elif self.inside_arena(pred1)==True and self.inside_arena(pred2)==False:
-                    self.translate(pred1[0], pred1[1], heading)
+                    self.translate(pred1[0], pred1[1], heading1)
                     self.isleft=True
             elif self.inside_arena(pred1)==False and self.inside_arena(pred2)==True:
-                    self.translate(pred2[0], pred2[1], heading)
+                    self.translate(pred2[0], pred2[1], heading2)
                     self.isleft=False
             else:
                 #stuck in corner, translate to origin
-                self.translate(self, 0, 0, self.yaw0) 
+                self.translate(0, 0, self.yaw0) 
 
 
     def passive_dodge(self):
@@ -176,22 +182,23 @@ class BaseDodge(object):
         borders=[-1, 1, -1, 1]
         if pos[0]<borders[0] or pos[0]>borders[1] or pos[1]<borders[2] or pos[1]>borders[3]:
             return False
-        return True
+        else:
+            return True
 
 
     def translate(self, x_target, y_target, angle):
-        msg=Joy()
+        msg=Twist()
         # vel=200 #must be small to avoid jerking, and secondly to avoid switching surface
         # distance_threshold=0.1
 
         x_error=(x_target-self.x0)*math.cos(self.yaw0)+(y_target-self.y0)*math.sin(self.yaw0)
         y_error=-(x_target-self.x0)*math.sin(self.yaw0)+(y_target-self.y0)*math.cos(self.yaw0)
-        ang_error=math.atan2(math.sin(angle-self.yaw0), math.cos(angle-self.yaw0))
+        # ang_error=math.atan2(math.sin(angle-self.yaw0), math.cos(angle-self.yaw0))
 
 
         x_derivative = (x_error - self.pre_x_error) / self.del_T
         y_derivative = (y_error - self.pre_y_error) / self.del_T
-        ang_derivative = (ang_error - self.pre_ang_error) / self.del_T
+        # ang_derivative = (ang_error - self.pre_ang_error) / self.del_T
 
         # integrals (PID)
         self.x_integral += x_error * self.del_T
@@ -206,11 +213,11 @@ class BaseDodge(object):
         elif self.y_integral < -self.lin_integral_threshold:
             self.y_integral = -self.lin_integral_threshold
 
-        self.ang_integral += ang_error * self.del_T
-        if self.ang_integral > self.ang_integral_threshold:
-            self.ang_integral = self.ang_integral_threshold
-        elif self.ang_integral < -self.ang_integral_threshold:
-            self.ang_integral = -self.ang_integral_threshold
+        # self.ang_integral += ang_error * self.del_T
+        # if self.ang_integral > self.ang_integral_threshold:
+        #     self.ang_integral = self.ang_integral_threshold
+        # elif self.ang_integral < -self.ang_integral_threshold:
+        #     self.ang_integral = -self.ang_integral_threshold
         
         # output velocities
         x_linear_vel = (self.p_x * x_error) + (self.d_x * x_derivative) + (self.i_x * self.x_integral)
@@ -235,29 +242,8 @@ class BaseDodge(object):
         if abs(y_linear_vel)>220:
             y_linear_vel=y_linear_vel*220/abs(y_linear_vel)
 
-        y = self.bias - y_linear_vel
+        y = self.bias + y_linear_vel
 
-        angular_vel = (self.p_ang * ang_error) + (self.d_ang * ang_derivative) + (self.i_ang * self.ang_integral)
-        if angular_vel > self.ang_vel_thres:
-            angular_vel = self.ang_vel_thres
-        elif angular_vel < -self.ang_vel_thres:
-            angular_vel = -self.ang_vel_thres
-        theta = self.bias - angular_vel
-
-
-        msg.buttons = [y, theta, x]
-
-        self.cmd_vel_pub.publish(msg)
-
-        self.pre_x_error = x_error
-        self.pre_y_error = y_error
-        self.pre_ang_error = ang_error
-
-
-    def rotate(self, angle):
-
-        msg=Joy()
-        
         ang_error=math.atan2(math.sin(angle-self.yaw0), math.cos(angle-self.yaw0))
         derivative = (ang_error - self.pre_ang_error) / self.del_T
         self.ang_integral += ang_error * self.del_T
@@ -266,6 +252,8 @@ class BaseDodge(object):
         elif self.ang_integral < -self.ang_integral_threshold:
             self.ang_integral = -self.ang_integral_threshold
         angular_vel = (self.p_ang * ang_error) + (self.d_ang * derivative) + (self.i_ang * self.ang_integral)
+
+
 
 
         # if abs(ang_error)<math.pi:
@@ -278,9 +266,52 @@ class BaseDodge(object):
         elif angular_vel < -self.ang_vel_thres:
             angular_vel = -self.ang_vel_thres
 
-        theta = int(self.bias - angular_vel)
+        theta = self.bias + angular_vel
 
-        msg.buttons = [self.bias, theta, self.bias]
+
+        msg.linear.x = x
+        msg.linear.y = y
+        msg.angular.z = theta
+
+        self.cmd_vel_pub.publish(msg)
+
+        self.pre_x_error = x_error
+        self.pre_y_error = y_error
+        self.pre_ang_error = ang_error
+
+
+    def rotate(self, angle):
+
+        msg=Twist()
+        
+        ang_error=math.atan2(math.sin(angle-self.yaw0), math.cos(angle-self.yaw0))
+        derivative = (ang_error - self.pre_ang_error) / self.del_T
+        self.ang_integral += ang_error * self.del_T
+        if self.ang_integral > self.ang_integral_threshold:
+            self.ang_integral = self.ang_integral_threshold
+        elif self.ang_integral < -self.ang_integral_threshold:
+            self.ang_integral = -self.ang_integral_threshold
+        angular_vel = (self.p_ang * ang_error) + (self.d_ang * derivative) + (self.i_ang * self.ang_integral)
+
+
+
+
+        # if abs(ang_error)<math.pi:
+        #     msg.angular.z=1024+angular_vel
+        # else:
+        #     msg.angular.z=1024-angular_vel
+
+        if angular_vel > self.ang_vel_thres:
+            angular_vel = self.ang_vel_thres
+        elif angular_vel < -self.ang_vel_thres:
+            angular_vel = -self.ang_vel_thres
+
+        theta = self.bias + angular_vel
+
+        msg.linear.x = self.bias
+        msg.linear.y = self.bias
+        msg.angular.z = theta
+
 
         self.cmd_vel_pub.publish(msg)
                 
@@ -288,11 +319,11 @@ class BaseDodge(object):
 
 
 
-    def enemy_callback(self, msg):
+    # def enemy_callback(self, msg):
 
-        self.clustered_enemy_pos=[]
-        for point in msg.points:
-            self.clustered_enemy_pos.append([point.x, point.y])
+    #     self.clustered_enemy_pos=[]
+    #     for point in msg.points:
+    #         self.clustered_enemy_pos.append([point.x, point.y])
 
         # #size of stash
         # n_stash=30
@@ -326,7 +357,12 @@ class BaseDodge(object):
         #     #print(position_center)
         #     self.clustered_enemy_pos.append(position_center[0])
 
-
+    def enemy_callback(self, msg):
+        self.clustered_enemy_pos=[[msg.pose.pose.position.x, msg.pose.pose.position.y]]
+        # self.x0 = msg.pose.pose.position.x
+        # self.y0 = msg.pose.pose.position.y
+        # _, _, self.yaw0 = euler_from_quaternion((msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w))
+        # self.odom_received = True
 
     def odom_callback(self, msg):
         self.x0 = msg.pose.pose.position.x
