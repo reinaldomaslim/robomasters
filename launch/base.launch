@@ -1,0 +1,23 @@
+<launch>
+
+    <!--dji_ros-->
+    <include file="$(find dji_ros)/launch/dji_ros_launch.launch" />
+
+    <!--sensors: camera and rplidar-->
+    <include file="$(find base_vision)/launch/usb_cam.launch" />
+    <include file="$(find rplidar_ros)/launch/rplidar.launch" />
+
+    <!--tf broadcaster-->
+    <node name="tf_broadcaster" pkg="robomasters" type="tf_broadcaster.py" respawn="true" />
+
+    <!--camera masking-->
+    <node name="camera_masking" pkg="robomasters" type="camera_masking.py" respawn="true" />
+
+    <!--detect enemy-->
+    <node name="detect_enemy" pkg="robomasters" type="detect_enemy.py" respawn="true" />
+    
+    <!--dodging and shooting-->
+    <node name="dodge_and_shoot" pkg="robomasters" type="dodge_and_shoot.py" respawn="true" />
+    
+
+</launch>

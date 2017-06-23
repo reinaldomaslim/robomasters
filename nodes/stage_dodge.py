@@ -85,23 +85,19 @@ class BaseDodge(object):
     
         while not rospy.is_shutdown():
 
-                
-            if len(self.clustered_enemy_pos)==0:
-                #if none enemy around, stop
-                self.stop()
-                print("none")
-            elif len(self.clustered_enemy_pos)==1 or len(self.clustered_enemy_pos)==2:
+            if len(self.clustered_enemy_pos)==1 or len(self.clustered_enemy_pos)==2:
                 #if only one, active dodging 
                 self.active_dodge()
                 print("enemy detected")
-                print(len(self.clustered_enemy_pos))
-                
+                print(len(self.clustered_enemy_pos))                
             else:
                 #more than one, passive dodge
                 #self.passive_dodge()
                 print("passive dodge")
 
             rate.sleep()
+
+        self.stop()
 
 
     def stop(self):
