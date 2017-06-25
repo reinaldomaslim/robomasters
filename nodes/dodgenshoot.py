@@ -29,7 +29,7 @@ class BaseDodge(object):
     enemy_pos=[]
     clustered_enemy_pos=[]
 
-    ## PID constants
+    ## Movement PID constants
     del_T = 100.0   # time step in ms
     p_ang = 450.0
     i_ang = 0.0
@@ -64,19 +64,44 @@ class BaseDodge(object):
     Ly = 0.0
     t=0
 
-    #bias of controller
-    bias=1024
 
     #preferred direction of active dodging
     isleft=True
 
+    #turret control params
+    state_x = 0
+    state_y = 0
+    updatetime = time()
+
+    # PID parameters
+    xMax = 640
+    yMax = 480
+
+    Kp = 0.51
+    Ki = 0
+    Kd = 0.6
+
+    target_x = 320
+    target_y = 240
+    
+    errorp_x = 0
+    errorp_y = 0
+
+    #cmd vel params
+    cmd_x=bias
+    cmd_y=bias
+    cmd_yaw=bias
+    cmd_yaw_turret=bias
+    cmd_pitch=bias
+    cmd_shoot=0
 
     def __init__(self, nodename):
         rospy.init_node(nodename, anonymous=False)
     
         rospy.Subscriber("/odometry", Odometry, self.odom_callback, queue_size = 50)
         rospy.Subscriber("/enemy_yolo", Marker, self.enemy_callback, queue_size = 50)
-        self.cmd_vel_pub=rospy.Publisher("/vel_cmd", Joy, queue_size=10)
+        rospy.Subscriber('/armor', Vector3, self.armor_callback, queue_size = 50)
+        self.cmd_vel_pub=rospy.Publisher("/cmd_vel", Joy, queue_size=10)
 
         #self.initMarker()
 
@@ -84,118 +109,87 @@ class BaseDodge(object):
     
         while not rospy.is_shutdown():
             
-            if len(self.clustered_enemy_pos)==0:
-                #if none enemy around, stop
-                self.stop()
-                print("none")
-            elif len(self.clustered_enemy_pos)==1 or len(self.clustered_enemy_pos)==2:
+            if len(self.clustered_enemy_pos)==1:
                 #if only one, active dodging 
-                self.active_dodge()
-                print("enemy detected")
-                print(len(self.clustered_enemy_pos))
-                
+                self.active_dodge()      
             else:
                 #more than one, passive dodge
-                #self.passive_dodge()
-                print("passive dodge")
+                self.passive_dodge()
+            
+            msg=Joy()
+            
+            #do priority that governs yawing (lidar or vision)
+            if time()-self.updatetime<0.15:
+                #armor detected
+                msg.buttons=[self.cmd_x, self.cmd_y, self.cmd_yaw_turret, self.cmd_pitch, self.cmd_shoot]
+
+            else:
+                self.state_x=0
+                self.state_y=0
+                self.cmd_shoot=0
+                self.cmd_pitch=self.bias
+                msg.buttons=[self.cmd_x, self.cmd_y, self.cmd_yaw, self.cmd_pitch, self.cmd_shoot]
+
+            self.cmd_vel_pub.publish(msg)
 
             rate.sleep()
+
+        self.stop()
 
 
     def stop(self):
         msg=Joy()
-        msg.buttons = [self.bias, self.bias, self.bias]
+        msg.buttons = [self.bias, self.bias, self.bias, self.bias, 0]
         self.cmd_vel_pub.publish(msg)
 
     def active_dodge(self):
-        heading_threshold=5*math.pi/180
-
-        if len(self.clustered_enemy_pos)==1:
-
-            target=self.clustered_enemy_pos[0]
-
-            #rotate to face target
-            heading=math.atan2(target[1]-self.y0, target[0]-self.x0)
-
-            difference=abs(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading)))
-
-            if difference>heading_threshold:
-                print("rotate")
-                print(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading))*180/math.pi)
-                self.rotate(heading)
-            else:
-                d=0.2
-                #direction to the left
-                beta1=heading+math.pi/2
-                #direction to the right
-                beta2=heading-math.pi/2
-
-                #predict position a timestep ahead
-                pred1=[self.x0+d*math.cos(beta1), self.y0+d*math.sin(beta1)]
-                pred2=[self.x0+d*math.cos(beta2), self.y0+d*math.sin(beta2)]
-
-                if self.inside_arena(pred1)==True and self.inside_arena(pred2)==True:
-                    #go to preferred direction
-                    if self.isleft==True:
-                        self.translate(pred1[0], pred1[1], heading)
-                    else:
-                        self.translate(pred2[0], pred2[1], heading)
-
-                elif self.inside_arena(pred1)==True and self.inside_arena(pred2)==False:
-                        self.translate(pred1[0], pred1[1], heading)
-                        self.isleft=True
-                elif self.inside_arena(pred1)==False and self.inside_arena(pred2)==True:
-                        self.translate(pred2[0], pred2[1], heading)
-                        self.isleft=False
-                else:
-                    #stuck in corner, translate to origin
-                    self.translate(self, 0, 0, self.yaw0) 
-
-        elif len(self.clustered_enemy_pos)==2:
+        if len(self.clustered_enemy_pos)==2:
             target=np.average(np.asarray(self.clustered_enemy_pos))
 
-            target1=self.clustered_enemy_pos[0]
-            target2=self.clustered_enemy_pos[1]
 
-            heading1=math.atan2(target1[1]-self.y0, target1[0]-self.x0)
-            heading2=math.atan2(target2[1]-self.y0, target2[0]-self.x0)
+        target=self.clustered_enemy_pos[0]
 
-            heading=(heading1+heading2)/2
-            difference=abs(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading)))
+        #rotate to face target
+        heading=math.atan2(target[1]-self.y0, target[0]-self.x0)
+        heading_threshold=50*math.pi/180
+        difference=abs(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading)))
 
-            if difference>heading_threshold:
-                print("rotate")
-                print(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading))*180/math.pi)
-                self.rotate(heading)
-            else:
-                d=0.2
-                #direction to the left
-                beta1=heading+math.pi/2
-                #direction to the right
-                beta2=heading-math.pi/2
+        if difference>heading_threshold:
 
-                #predict position a timestep ahead
-                pred1=[self.x0+d*math.cos(beta1), self.y0+d*math.sin(beta1)]
-                pred2=[self.x0+d*math.cos(beta2), self.y0+d*math.sin(beta2)]
+            print("rotate")
+            print(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading))*180/math.pi)
+            self.rotate(heading)
+        else:
+            print("translate")
+            d=0.3
+            #direction to the left
+            beta1=heading+math.pi/2
+            #direction to the right
+            beta2=heading-math.pi/2
 
-                if self.inside_arena(pred1)==True and self.inside_arena(pred2)==True:
-                    #go to preferred direction
-                    if self.isleft==True:
-                        self.translate(pred1[0], pred1[1], heading)
-                    else:
-                        self.translate(pred2[0], pred2[1], heading)
+            #predict position a timestep ahead
+            pred1=[self.x0+d*math.cos(beta1), self.y0+d*math.sin(beta1)]
+            pred2=[self.x0+d*math.cos(beta2), self.y0+d*math.sin(beta2)]
 
-                elif self.inside_arena(pred1)==True and self.inside_arena(pred2)==False:
-                        self.translate(pred1[0], pred1[1], heading)
-                        self.isleft=True
-                elif self.inside_arena(pred1)==False and self.inside_arena(pred2)==True:
-                        self.translate(pred2[0], pred2[1], heading)
-                        self.isleft=False
+            heading1=math.atan2(target[1]-pred1[1], target[0]-pred1[0])
+            heading2=math.atan2(target[1]-pred2[1], target[0]-pred2[0])
+
+            if self.inside_arena(pred1)==True and self.inside_arena(pred2)==True:
+                #go to preferred direction
+                if self.isleft==True:
+                    self.translate(pred1[0], pred1[1], heading1)
                 else:
-                    #stuck in corner, translate to origin
-                    self.translate(self, 0, 0, self.yaw0) 
+                    self.translate(pred2[0], pred2[1], heading2)
 
-
+            elif self.inside_arena(pred1)==True and self.inside_arena(pred2)==False:
+                    self.translate(pred1[0], pred1[1], heading1)
+                    self.isleft=True
+            elif self.inside_arena(pred1)==False and self.inside_arena(pred2)==True:
+                    self.translate(pred2[0], pred2[1], heading2)
+                    self.isleft=False
+            else:
+                #stuck in corner, translate to origin
+                self.translate(0, 0, self.yaw0) 
 
 
 
@@ -226,9 +220,6 @@ class BaseDodge(object):
 
 
     def translate(self, x_target, y_target, angle):
-        msg=Joy()
-        # vel=200 #must be small to avoid jerking, and secondly to avoid switching surface
-        # distance_threshold=0.1
 
         x_error=(x_target-self.x0)*math.cos(self.yaw0)+(y_target-self.y0)*math.sin(self.yaw0)
         y_error=-(x_target-self.x0)*math.sin(self.yaw0)+(y_target-self.y0)*math.cos(self.yaw0)
@@ -269,7 +260,7 @@ class BaseDodge(object):
             x_linear_vel=x_linear_vel*450/abs(x_linear_vel)
 
 
-        x = self.bias + x_linear_vel
+        self.cmd_x = self.bias + x_linear_vel
 
         y_linear_vel = (self.p_y * y_error) + (self.d_y * y_derivative) + (self.i_y * self.y_integral)
         if y_linear_vel > self.lin_vel_thres:
@@ -281,19 +272,16 @@ class BaseDodge(object):
         if abs(y_linear_vel)>220:
             y_linear_vel=y_linear_vel*220/abs(y_linear_vel)
 
-        y = self.bias - y_linear_vel
+        self.cmd_y = self.bias - y_linear_vel
 
         angular_vel = (self.p_ang * ang_error) + (self.d_ang * ang_derivative) + (self.i_ang * self.ang_integral)
         if angular_vel > self.ang_vel_thres:
             angular_vel = self.ang_vel_thres
         elif angular_vel < -self.ang_vel_thres:
             angular_vel = -self.ang_vel_thres
-        theta = self.bias - angular_vel
 
+        self.cmd_yaw = self.bias - angular_vel
 
-        msg.buttons = [y, theta, x]
-
-        self.cmd_vel_pub.publish(msg)
 
         self.pre_x_error = x_error
         self.pre_y_error = y_error
@@ -302,8 +290,6 @@ class BaseDodge(object):
 
     def rotate(self, angle):
 
-        msg=Joy()
-        
         ang_error=math.atan2(math.sin(angle-self.yaw0), math.cos(angle-self.yaw0))
         derivative = (ang_error - self.pre_ang_error) / self.del_T
         self.ang_integral += ang_error * self.del_T
@@ -314,22 +300,17 @@ class BaseDodge(object):
         angular_vel = (self.p_ang * ang_error) + (self.d_ang * derivative) + (self.i_ang * self.ang_integral)
 
 
-        # if abs(ang_error)<math.pi:
-        #     msg.angular.z=1024+angular_vel
-        # else:
-        #     msg.angular.z=1024-angular_vel
-
         if angular_vel > self.ang_vel_thres:
             angular_vel = self.ang_vel_thres
         elif angular_vel < -self.ang_vel_thres:
             angular_vel = -self.ang_vel_thres
 
-        theta = int(self.bias - angular_vel)
 
-        msg.buttons = [self.bias, theta, self.bias]
+        self.cmd_x=self.bias
+        self.cmd_y=self.bias
+        self.cmd_yaw = int(self.bias - angular_vel)
 
-        self.cmd_vel_pub.publish(msg)
-                
+
         self.pre_ang_error = ang_error
 
 
@@ -339,38 +320,31 @@ class BaseDodge(object):
         self.clustered_enemy_pos=[]
         for point in msg.points:
             self.clustered_enemy_pos.append([point.x, point.y])
+    
 
-        # #size of stash
-        # n_stash=30
-        # #for a detected edge, add it into the list. If list is full, replace the first element.
-        # if len(self.enemy_pos)==n_stash:
-        #     #remove the first element
-        #     del self.enemy_pos[0]
 
-        # _, _, yaw_angle = euler_from_quaternion((msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w))
-        # #4print(self.get_heading(yaw_angle))
-        # self.enemy_pos.append([msg.pose.position.x, msg.pose.position.y])
-        
-        # #perform clustering to enemy
-        # X=np.asarray(self.enemy_pos)
-        # db = DBSCAN(eps=0.5, min_samples=5).fit(X)
-        
-        # core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
-        # core_samples_mask[db.core_sample_indices_] = True
-        # labels = db.labels_
-        
-        # n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
-        # if n_clusters_==0:
-        #     return
+    def armor_callback(self, msg):
 
-        # clusters = [X[labels == i] for i in range(n_clusters_)]
-        # self.clustered_enemy_pos=[]
+        state_x = msg.x
+        state_y = msg.y
 
-        # for i in range(len(clusters)):
-        #     position_kmeans=KMeans(n_clusters=1).fit(clusters[i])
-        #     position_center=position_kmeans.cluster_centers_
-        #     #print(position_center)
-        #     self.clustered_enemy_pos.append(position_center[0])
+        error_x = self.target_x - state_x
+        output_x = self.Kp*error_x + self.Ki*(error_x+self.errorp_x) + self.Kd*(error_x-self.errorp_x)
+        self.cmd_yaw_turret = self.bias - output_x
+    
+        error_y = state_y - self.target_y
+        output_y = self.Kp*error_y + self.Ki*(error_y+self.errorp_y) + self.Kd*(error_y-self.errorp_y)
+        self.cmd_pitch = self.bias - output_y
+    
+        self.errorp_x = error_x
+        self.errorp_y = error_y
+
+        if abs(error_x) < 100 and abs(error_y) < 100:
+            self.cmd_shoot = 1
+        else:
+            self.cmd_shoot = 0
+
+        self.updatetime=time()
 
 
 
