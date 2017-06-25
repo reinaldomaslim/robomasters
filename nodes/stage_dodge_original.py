@@ -157,63 +157,21 @@ class BaseDodge(object):
 
     def passive_dodge(self):
 
-        path = 1
-        counter = 1
-        cworccw = 1
-
-        if path == 1:
-            ref_x = self.x_plot(self.t,0,0.7,0.25)
-            ref_y = self.y_plot(self.t,0,0.7,0.25)
-
-
-        elif path == 2:
-            ref_x = self.x_plot(self.t,-26,-0.45,-0.625)
-            ref_y = self.y_plot(self.t,26,0.45,0.625)
-
-
-        elif path == 3:
-            ref_x = self.x_plot(self.t,-26,0.45,0.625)
-            ref_y = self.y_plot(self.t,-26,0.45,0.625)
-
-
-        elif path == 4:
-            ref_x = self.x_plot(self.t,0,-0.7,-0.25)
-            ref_y = self.y_plot(self.t,0,0.7,0.25)
-
-
-        elif path == 5:
-            ref_x = self.x_plot(self.t,26,0.45,0.625)
-            ref_y = self.y_plot(self.t,26,0.45,0.625)
-
-
-        elif path == 6:
-            ref_x = self.x_plot(self.t,26,-0.45,-0.625)
-            ref_y = self.y_plot(self.t,-26,0.45,0.625)
-
- 
-        if self.t > counter*35:
-            path += 1
-            counter += 1
-        
-        if path > 6:
-            path = 1
-
+        ref_x = self.x_plot(self.t)
+        ref_y = self.y_plot(self.t)
         self.t += 1
-        rospy.spin()
-
 
         if self.inside_arena([ref_x, ref_y])==True:
             #if target is inside arena
-            if path < 4:
-                self.translate(ref_x, ref_y, self.yaw0+3*path)
-            else:
-                self.translate(ref_x, ref_y, -self.yaw0+3*path)
+            self.translate(ref_x, ref_y, 0)
 
-    def x_plot(self,t,Lx=0.0,Ay=0.7,Ax=0.7):
-        return self.Ax*math.sin(3/2*math.pi*t*self.T_step/self.Px + self.Lx)#*math.sin(1*pi*t*T_step/Px + Lx)
+        
 
-    def y_plot(self,t,Lx=0.0,Ay=0.7,Ax=0.7):
-        return self.Ay*math.cos(2*math.pi*t*self.T_step/self.Py + self.Ly)#*math.sin(1*pi*t*T_step/Px + Lx)
+    def x_plot(self, t):
+        return self.Ax*math.sin(2*math.pi*t*self.T_step/self.Px + self.Lx)
+
+    def y_plot(self, t):
+        return self.Ay*math.cos(2*math.pi*t*self.T_step/self.Py + self.Ly)
 
 
     def inside_arena(self, pos):

@@ -55,7 +55,7 @@ class BaseDodge(object):
     lin_integral_threshold = 5.0
     ang_integral_threshold = 5.0
 
-    # path function parameters
+    # self.path function parameters
     T_step =100.0   #time step in ms, 10Hz
     Ax = 1.0    #amplitude
     Ay = 1.0
@@ -64,7 +64,8 @@ class BaseDodge(object):
     Lx = 1000.0 #phase lag
     Ly = 0.0
     t=0
-
+    path = 1
+    counter = 1
 
 
     #preferred direction of active dodging
@@ -154,67 +155,70 @@ class BaseDodge(object):
                 #stuck in corner, translate to origin
                 self.translate(0, 0, self.yaw0) 
 
+    def x_plot(self,t,Lx,Ay,Ax):
+        #print("Ax      : ",Ax)
+        #print("Lx      : ",Lx)
+        #print("Ay      : ",Ay)
+        return Ax*math.sin(3/2*math.pi*t*self.T_step/self.Px + Lx)#*math.sin(1*math.pi*t*self.T_step/self.Px + Lx)
+
+
+    def y_plot(self,t,Lx,Ay,Ax):
+        #print("Ax      : ",Ax)
+        #print("Lx      : ",Lx)
+        #print("Ay      : ",Ay)
+        return Ay*math.cos(2*math.pi*t*self.T_step/self.Py + self.Ly)#*math.sin(1*math.pi*t*self.T_step/self.Px + Lx)
 
     def passive_dodge(self):
 
-        path = 1
-        counter = 1
-        cworccw = 1
-
-        if path == 1:
+        if self.path == 1:
             ref_x = self.x_plot(self.t,0,0.7,0.25)
             ref_y = self.y_plot(self.t,0,0.7,0.25)
 
 
-        elif path == 2:
+        elif self.path == 2:
             ref_x = self.x_plot(self.t,-26,-0.45,-0.625)
             ref_y = self.y_plot(self.t,26,0.45,0.625)
 
 
-        elif path == 3:
+        elif self.path == 3:
             ref_x = self.x_plot(self.t,-26,0.45,0.625)
             ref_y = self.y_plot(self.t,-26,0.45,0.625)
 
 
-        elif path == 4:
+        elif self.path == 4:
             ref_x = self.x_plot(self.t,0,-0.7,-0.25)
             ref_y = self.y_plot(self.t,0,0.7,0.25)
 
 
-        elif path == 5:
+        elif self.path == 5:
             ref_x = self.x_plot(self.t,26,0.45,0.625)
             ref_y = self.y_plot(self.t,26,0.45,0.625)
 
 
-        elif path == 6:
+        elif self.path == 6:
             ref_x = self.x_plot(self.t,26,-0.45,-0.625)
             ref_y = self.y_plot(self.t,-26,0.45,0.625)
 
  
-        if self.t > counter*35:
-            path += 1
-            counter += 1
+        if self.t > self.counter*35:
+            self.path += 1
+            self.counter += 1
         
-        if path > 6:
-            path = 1
+        if self.path > 6:
+            self.path = 1
 
         self.t += 1
-        rospy.spin()
 
+        print("Path    : ",self.path)
+        print("Time    : ",self.t)
+        print("Counter : ",self.counter)
 
         if self.inside_arena([ref_x, ref_y])==True:
             #if target is inside arena
-            if path < 4:
-                self.translate(ref_x, ref_y, self.yaw0+3*path)
+            if self.path < 4:
+                self.translate(ref_x, ref_y, self.yaw0 + 3*self.path)
             else:
-                self.translate(ref_x, ref_y, -self.yaw0+3*path)
-
-    def x_plot(self,t,Lx=0.0,Ay=0.7,Ax=0.7):
-        return self.Ax*math.sin(3/2*math.pi*t*self.T_step/self.Px + self.Lx)#*math.sin(1*pi*t*T_step/Px + Lx)
-
-    def y_plot(self,t,Lx=0.0,Ay=0.7,Ax=0.7):
-        return self.Ay*math.cos(2*math.pi*t*self.T_step/self.Py + self.Ly)#*math.sin(1*pi*t*T_step/Px + Lx)
-
+                self.translate(ref_x, ref_y, self.yaw0 - 3*self.path)
 
     def inside_arena(self, pos):
         #check whether pos is inside arena, assuming origin 0,0 in middle
