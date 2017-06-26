@@ -209,9 +209,9 @@ class BaseDodge(object):
 
         self.t += 1
 
-        print("Path    : ",self.path)
-        print("Time    : ",self.t)
-        print("Counter : ",self.counter)
+        #print("Path    : ",self.path)
+        #print("Time    : ",self.t)
+        #print("Counter : ",self.counter)
 
         if self.inside_arena([ref_x, ref_y])==True:
             #if target is inside arena

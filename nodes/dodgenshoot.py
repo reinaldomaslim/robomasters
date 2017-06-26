@@ -13,7 +13,7 @@ import math
 import cv2
 
 from actionlib_msgs.msg import *
-from geometry_msgs.msg import Pose, Point, Quaternion, Twist, PoseStamped
+from geometry_msgs.msg import Pose, Point, Quaternion, Twist, PoseStamped, Vector3
 from sensor_msgs.msg import RegionOfInterest, CameraInfo, LaserScan, Joy
 from nav_msgs.msg import Odometry
 from tf.transformations import quaternion_from_euler, euler_from_quaternion
@@ -23,6 +23,7 @@ from sklearn import metrics
 from sklearn.metrics.pairwise import euclidean_distances, manhattan_distances
 from sklearn.preprocessing import StandardScaler, normalize
 from collections import Counter
+from time import time
 
 class BaseDodge(object):
     x0, y0, yaw0= 0, 0, 0
@@ -63,6 +64,8 @@ class BaseDodge(object):
     Lx = 1000.0 #phase lag
     Ly = 0.0
     t=0
+    path = 1
+    counter = 1
 
 
     #preferred direction of active dodging
@@ -193,21 +196,70 @@ class BaseDodge(object):
 
 
 
+    def x_plot(self,t,Lx,Ay,Ax):
+        #print("Ax      : ",Ax)
+        #print("Lx      : ",Lx)
+        #print("Ay      : ",Ay)
+        return Ax*math.sin(3/2*math.pi*t*self.T_step/self.Px + Lx)#*math.sin(1*math.pi*t*self.T_step/self.Px + Lx)
+
+
+    def y_plot(self,t,Lx,Ay,Ax):
+        #print("Ax      : ",Ax)
+        #print("Lx      : ",Lx)
+        #print("Ay      : ",Ay)
+        return Ay*math.cos(2*math.pi*t*self.T_step/self.Py + self.Ly)#*math.sin(1*math.pi*t*self.T_step/self.Px + Lx)
+
     def passive_dodge(self):
 
-        ref_x = self.x_plot(self.t)
-        ref_y = self.y_plot(self.t)
+        if self.path == 1:
+            ref_x = self.x_plot(self.t,0,0.7,0.25)
+            ref_y = self.y_plot(self.t,0,0.7,0.25)
+
+
+        elif self.path == 2:
+            ref_x = self.x_plot(self.t,-26,-0.45,-0.625)
+            ref_y = self.y_plot(self.t,26,0.45,0.625)
+
+
+        elif self.path == 3:
+            ref_x = self.x_plot(self.t,-26,0.45,0.625)
+            ref_y = self.y_plot(self.t,-26,0.45,0.625)
+
+
+        elif self.path == 4:
+            ref_x = self.x_plot(self.t,0,-0.7,-0.25)
+            ref_y = self.y_plot(self.t,0,0.7,0.25)
+
+
+        elif self.path == 5:
+            ref_x = self.x_plot(self.t,26,0.45,0.625)
+            ref_y = self.y_plot(self.t,26,0.45,0.625)
+
+
+        elif self.path == 6:
+            ref_x = self.x_plot(self.t,26,-0.45,-0.625)
+            ref_y = self.y_plot(self.t,-26,0.45,0.625)
+
+ 
+        if self.t > self.counter*35:
+            self.path += 1
+            self.counter += 1
+        
+        if self.path > 6:
+            self.path = 1
+
         self.t += 1
+
+        #print("Path    : ",self.path)
+        #print("Time    : ",self.t)
+        #print("Counter : ",self.counter)
 
         if self.inside_arena([ref_x, ref_y])==True:
             #if target is inside arena
-            self.translate(ref_x, ref_y, 0)
-
-    def x_plot(self, t):
-        return self.Ax*math.sin(2*math.pi*t*self.T_step/self.Px + self.Lx)
-
-    def y_plot(self, t):
-        return self.Ay*math.cos(2*math.pi*t*self.T_step/self.Py + self.Ly)
+            if self.path < 4:
+                self.translate(ref_x, ref_y, self.yaw0 + 3*self.path)
+            else:
+                self.translate(ref_x, ref_y, self.yaw0 - 3*self.path)
 
 
     def inside_arena(self, pos):
