@@ -1,0 +1,76 @@
+define block model
+(
+  size [0.5 0.5 0.5]
+  gui_nose 0
+)
+
+define topurg ranger
+(
+   sensor( 			
+    range [ 0.0  5.0 ]
+    fov 180
+    #fov 270.25
+    samples 512
+  )
+
+  # generic model properties
+  color "black"
+  size [ 0.05 0.05 0.1 ]
+)
+
+define maven position
+(
+  #size [0.415 0.392 0.25]
+  #size [0.35 0.35 0.35]
+  size [0.6 0.6 0.6]
+  origin [-0.05 0 0 0]
+  gui_nose 1
+  drive "omni"
+  topurg(pose [ 0.050 0.000 0 0.000 ])
+)
+
+define floorplan model
+(
+  # sombre, sensible, artistic
+  color "gray30"
+
+  # most maps will need a bounding box
+  boundary 1
+
+  gui_nose 0
+  gui_grid 0
+
+  gui_outline 0
+  gripper_return 0
+  fiducial_return 0
+  laser_return 1
+)
+
+# set the resolution of the underlying raytrace model in meters
+resolution 0.02
+
+interval_sim 100  # simulation timestep in milliseconds
+
+
+window
+( 
+  size [ 745.000 448.000 ] 
+
+  #rotate [ 0.000 -1.560 ]
+  
+  scale 28.806 
+)
+
+# load an environment bitmap
+floorplan
+( 
+  name "rrc"
+  bitmap "rrc2.pgm"
+  size [15.0 20.0 0.8]
+  pose [0 0 0 0 ]
+)
+
+# throw in a robot
+maven( pose [ 0.230 -5.000 0 0.000 ] name "blue" color "blue")
+#maven( pose [ -1.277 -6.266 0 0.000 ] name "blue" color "blue")
+#block( pose [ -1.924 5.020 0 180.000 ] color "red")
