@@ -57,7 +57,7 @@ void publish_joy(void);
 void publish_localization(void);
 sensor_msgs::Joy joy_msg;
 geometry_msgs::Twist localization_msg;
-ros::Subscriber<sensor_msgs::Joy> sub_joy("/cmd_vel", joy_cb);
+ros::Subscriber<sensor_msgs::Joy> sub_joy("/vel_cmd", joy_cb);
 ros::Publisher pub_joy( "/joy_msg", &joy_msg);
 ros::Publisher pub_localization( "/localization", &localization_msg);
 char frameid[] = "/joy_msg";
