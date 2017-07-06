@@ -7,18 +7,22 @@
 import rospy
 import numpy as np
 from time import time
+
 from sensor_msgs.msg import Joy
 from sensor_msgs.msg import RegionOfInterest
 
+#global variables
 state_x = 0
 state_y = 0
 stash = []
 updatetime = time()
 
+#camera parameters
+xMax = rospy.get_param('/usb_cam/image_width') / 10
+yMax = rospy.get_param('/usb_cam/image_height') / 10
 def callback(roi):
     global updatetime
     updatetime = time()
-
     # print "/roi = ", roi.x_offset, roi.y_offset
 
     #calculate center of roi
@@ -39,7 +43,7 @@ def callback(roi):
 
 def turret():
     global state_x, state_y, updatetime
-    pub = rospy.Publisher('/vel_cmd', Joy, queue_size=10)
+    pub = rospy.Publisher('/cmd_vel', Joy, queue_size=10)
     rospy.init_node('turret', anonymous=True)
     rospy.Subscriber('/roi', RegionOfInterest, callback)
     rate = rospy.Rate(10) # 10Hz
@@ -50,12 +54,15 @@ def turret():
     outMin = 524
     outNeutral = 1024
     outMax = 1524
+    # needs tuning again
+    Kp = 1.6
+    Ki = 0.001
+    Kd = 0.7
 
     # needs tuning again
     Kp = 1.2
     Ki = 0.01
     Kd = 0.9
-
     target_x = xMax/2
     target_y = yMax/2
     
@@ -93,12 +100,6 @@ def turret():
             
         output = Joy()
         output.buttons = [outNeutral, outNeutral, output_x, output_y, shoot]
-
-        # rospy.loginfo("x_pos = %d", state_x)
-        # rospy.loginfo("y_pos = %d", state_y)
-        # rospy.loginfo("yaw = %d", output.buttons[2])
-        # rospy.loginfo("pitch = %d", output.buttons[3])
-        # rospy.loginfo("shoot = %d", output.buttons[4])
 
         pub.publish(output)
         rate.sleep()

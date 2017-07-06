@@ -5,7 +5,6 @@
   reading result = dBus.channels[0-7]
 
 */
-#include "DJI_DBUS.h"
 
 //there are two versions of DJI controller protocol
 // one is the latestest firmware with 25 bits with 7 channel
@@ -18,6 +17,7 @@ mid value = bin 10000000000   (1024)   0x400
 max value = bin 11010010100   (1684)   0x694
 max value = bin 00101101100   (364)   0x16C
  */
+void readDbusData();
 void write18BitsDbusData();
 boolean running = false;
 const byte channel = 6;
@@ -53,9 +53,7 @@ static union
 }ROS_Upload;
 
 
-DJI_DBUS dBus(Serial1);
 int led = 13; 
-int reset = 22;
 uint32_t currTime, displayTime = 0;
 uint8_t i;
 
@@ -64,10 +62,15 @@ void publish_joy(void);
 void read_joy_cmd(void);
 
 void setup(){
+  pinMode(2, INPUT);
+  pinMode(3, INPUT);
+  pinMode(4, INPUT);
+  pinMode(5, INPUT);
+  pinMode(6, INPUT);
+  pinMode(7, INPUT);
   pinMode(led, OUTPUT);
-  //Serial.begin(115200);
+  Serial.begin(115200);
   Serial2.begin(100000,SERIAL_8E1);
-  dBus.begin();
   Serial3.begin(115200);
   
 }
@@ -76,33 +79,38 @@ int joy_pub_count =0;
 
 void loop(){
   
-  if (dBus.Failsafe() == DBUS_SIGNAL_OK) digitalWrite(led, HIGH);
-  dBus.FeedLine();
-  digitalWrite(led, LOW);
   currTime = millis();
   read_joy_cmd();
-  if (dBus.toChannels == 1){
-    dBus.UpdateChannels();
-    dBus.toChannels = 0;
-    
-    for(i=0;i<channel;i++){
-        DBus_Output[i] = dBus.channels[i];
-    }
-    
-  }
   
   if(displayTime < currTime) {
       displayTime = currTime + 7;
       joy_pub_count++;
+      readDbusData();
       write18BitsDbusData();
       if(joy_pub_count>2){
         joy_pub_count=0;
         publish_joy();
       }
-      //printDBUSStatus();
+      printDBUSStatus();
   }
+}
 
-  
+void readDbusData( ){
+  //dbus values 364 - 1024 - 1684
+  //futaba values 1085 - 1498 - 1911
+  //dbus channels R_LR R_UD L_LR L_UD CH_R CH_L
+  //futaba channels L_LR R_UD R_LR L_UD CH_L CH_R
+  for (int i=0; i<4; i++) {
+    int val = pulseIn(i+2, HIGH, 25000);
+    if (val>1400 && val<1590) DBus_Output[i] = 1024;
+    else DBus_Output[i] = map(val, 1085, 1918, 364, 1684);
+  }
+  for (int i=4; i<6; i++) {
+    int val = pulseIn(i+2, HIGH, 25000);
+    if (val<1200) DBus_Output[i] = CHANNEL_UP;
+    else if (val>1800) DBus_Output[i] = CHANNEL_DOWN;
+    else DBus_Output[i] = CHANNEL_MID;
+  }
 }
 
 void read_joy_cmd( ){
@@ -239,12 +247,7 @@ void write18BitsDbusData(){
   }
 
   //add safety system
-  if (DBus_Output[CHANNEL_L] == 0 && DBus_Output[CHANNEL_R]==0 && dBus.updatetime > 1000) {
-    pinMode(reset, OUTPUT);
-    digitalWrite(reset, LOW);
-  }
-  
-  if(currTime - dBus.updatetime > 500){
+  if(DBus_Output[CHANNEL_L] == 0||DBus_Output[CHANNEL_R]==0){
     DBus_Output[CHANNEL_L] = CHANNEL_MID;
     DBus_Final_Output[CHANNEL_L] = shooting(0);
     if (shoot==0) DBus_Final_Output[CHANNEL_R] = CHANNEL_MID;
@@ -342,13 +345,13 @@ void printDBUSStatus()
   Serial.print(" Channel2  ");
   Serial.print(DBus_Output[4]);
   Serial.print(" Stat ");
-  if (dBus.Failsafe() == DBUS_SIGNAL_FAILSAFE) {
+/*  if (dBus.Failsafe() == DBUS_SIGNAL_FAILSAFE) {
     Serial.print("FailSafe");
   } else if (dBus.Failsafe() == DBUS_SIGNAL_LOST) {
     Serial.print("Signal Lost");
   } else if (dBus.Failsafe() == DBUS_SIGNAL_OK) {
     Serial.print("OK");
-  }
+  }*/
   Serial.println(".");
   
 }

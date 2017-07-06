@@ -67,26 +67,22 @@ class BaseDodge(object):
     path = 1
     counter = 1
 
-
     #preferred direction of active dodging
     isleft=True
 
     #turret control params
-    state_x = 0
-    state_y = 0
     updatetime = time()
+    stash = []
+    xMax = rospy.get_param('/usb_cam/image_width') / 10
+    yMax = rospy.get_param('/usb_cam/image_height') / 10
 
-    # PID parameters
-    xMax = 640
-    yMax = 480
+    # needs tuning again
+    Kp = 1.6
+    Ki = 0.001
+    Kd = 0.8
 
-    Kp = 0.51
-    Ki = 0
-    Kd = 0.6
-
-    target_x = 320
-    target_y = 240
-    
+    target_x = xMax/2
+    target_y = yMax/2
     errorp_x = 0
     errorp_y = 0
 
@@ -103,7 +99,7 @@ class BaseDodge(object):
     
         rospy.Subscriber("/odometry", Odometry, self.odom_callback, queue_size = 50)
         rospy.Subscriber("/enemy_yolo", Marker, self.enemy_callback, queue_size = 50)
-        rospy.Subscriber('/armor', Vector3, self.armor_callback, queue_size = 50)
+        rospy.Subscriber('/roi', RegionOfInterest, self.armor_callback, queue_size = 50)
         self.cmd_vel_pub=rospy.Publisher("/cmd_vel", Joy, queue_size=10)
 
         #self.initMarker()
@@ -122,7 +118,7 @@ class BaseDodge(object):
             msg=Joy()
             
             #do priority that governs yawing (lidar or vision)
-            if time()-self.updatetime<0.15:
+            if time() - self.updatetime < 3:
                 #armor detected
                 msg.buttons=[self.cmd_x, self.cmd_y, self.cmd_yaw_turret, self.cmd_pitch, self.cmd_shoot]
 
@@ -389,8 +385,19 @@ class BaseDodge(object):
 
     def armor_callback(self, msg):
 
-        state_x = msg.x
-        state_y = msg.y
+        center = [0, 0]
+        center[0] = (msg.x_offset + msg.width/2) / 10
+        center[1] = (msg.y_offset + msg.height/2) / 10
+
+        if len(self.stash)==10:
+            del self.stash[0]
+        self.stash.append(center)
+
+        heatmap = np.zeros((self.xMax,self.yMax), dtype=np.uint8)
+        for ctr in self.stash:
+            heatmap[ctr[0], ctr[1]] += 1
+        
+        state_x, state_y = np.unravel_index(heatmap.argmax(), heatmap.shape)
 
         error_x = self.target_x - state_x
         output_x = self.Kp*error_x + self.Ki*(error_x+self.errorp_x) + self.Kd*(error_x-self.errorp_x)
@@ -403,7 +410,7 @@ class BaseDodge(object):
         self.errorp_x = error_x
         self.errorp_y = error_y
 
-        if abs(error_x) < 100 and abs(error_y) < 100:
+        if abs(error_x) < xMax/10 and abs(error_y) < yMax/6:
             self.cmd_shoot = 1
         else:
             self.cmd_shoot = 0
