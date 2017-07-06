@@ -146,6 +146,7 @@ class BaseDodge(object):
         self.cmd_vel_pub.publish(msg)
 
     def active_dodge(self):
+
         if len(self.clustered_enemy_pos)==2:
             target=np.average(np.asarray(self.clustered_enemy_pos))
 
@@ -154,25 +155,39 @@ class BaseDodge(object):
 
         #rotate to face target
         heading=math.atan2(target[1]-self.y0, target[0]-self.x0)
-        heading_threshold=50*math.pi/180
+        print(heading*180/math.pi)
+        print(self.yaw0*180/math.pi)
+        print(abs(heading-self.yaw0)*180/math.pi)
+        heading_threshold=5*math.pi/180
         difference=abs(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading)))
 
         if difference>heading_threshold:
 
-            print("rotate")
+            #print("rotate")
             print(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading))*180/math.pi)
             self.rotate(heading)
         else:
-            print("translate")
-            d=0.3
+            
+            #print("translate")
+            d=0.27
+            
             #direction to the left
             beta1=heading+math.pi/2
             #direction to the right
             beta2=heading-math.pi/2
 
-            #predict position a timestep ahead
-            pred1=[self.x0+d*math.cos(beta1), self.y0+d*math.sin(beta1)]
-            pred2=[self.x0+d*math.cos(beta2), self.y0+d*math.sin(beta2)]
+                #check if out of radius, assume middle of the arena is origin
+            if math.sqrt(self.x0**2+self.y0**2)>0.7:
+                #add to origin vector
+                delta=math.atan2(-self.y0, -self.x0)
+                #print(delta*180/math.pi)
+                pred1=[self.x0+d*math.cos(beta1)+0.1*math.cos(delta), self.y0+d*math.sin(beta1)+0.1*math.sin(delta)]
+                pred2=[self.x0+d*math.cos(beta2)+0.1*math.cos(delta), self.y0+d*math.sin(beta2)+0.1*math.sin(delta)]
+            else:
+                #predict position a timestep ahead
+                pred1=[self.x0+d*math.cos(beta1), self.y0+d*math.sin(beta1)]
+                pred2=[self.x0+d*math.cos(beta2), self.y0+d*math.sin(beta2)]
+
 
             heading1=math.atan2(target[1]-pred1[1], target[0]-pred1[0])
             heading2=math.atan2(target[1]-pred2[1], target[0]-pred2[0])
@@ -193,8 +208,6 @@ class BaseDodge(object):
             else:
                 #stuck in corner, translate to origin
                 self.translate(0, 0, self.yaw0) 
-
-
 
     def x_plot(self,t,Lx,Ay,Ax):
         #print("Ax      : ",Ax)
@@ -260,7 +273,6 @@ class BaseDodge(object):
                 self.translate(ref_x, ref_y, self.yaw0 + 3*self.path)
             else:
                 self.translate(ref_x, ref_y, self.yaw0 - 3*self.path)
-
 
     def inside_arena(self, pos):
         #check whether pos is inside arena, assuming origin 0,0 in middle

@@ -30,6 +30,9 @@ class FindEnemy(object):
     counter=0
     grid=[]
 
+    #ignore detections on own body, units in angle
+    own_body=[]
+
     def __init__(self, nodename):
         rospy.init_node(nodename, anonymous=False)
     
@@ -48,12 +51,16 @@ class FindEnemy(object):
 
     def scan_callback(self, msg):
 
+        for mask in own_body:
+            msg.ranges[mask[0]:mask[1]]=100
+
         if self.counter>self.lookback:
             self.counter=0
         if self.counter==0:
             self.grid=[]
 
         for i in range(len(msg.ranges)):
+
             if msg.ranges[i]<self.radius:
                 theta=i*msg.angle_increment#-math.pi/4
                 d=msg.ranges[i]
