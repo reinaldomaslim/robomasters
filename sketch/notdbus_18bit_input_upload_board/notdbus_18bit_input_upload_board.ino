@@ -70,7 +70,7 @@ void publish_data(void);
 void setup(){
   pinMode(led, OUTPUT);
   //Serial.begin(115200);
-  Serial2.begin(115200);
+  Serial1.begin(115200);
   //Serial.println("DBUS Status");
   Serial3.begin(115200);
 
@@ -119,12 +119,12 @@ void joy_cb( const sensor_msgs::Joy& joy){
   ROS_Output.joyData[2] = (uint16_t)(joy.buttons[2]);
   ROS_Output.joyData[3] = (uint16_t)(joy.buttons[3]);
   ROS_Output.joyData[4] = (uint16_t)(joy.buttons[4]);
-  Serial2.write(0xFA);
-  Serial2.write(0xBC);
+  Serial1.write(0xFA);
+  Serial1.write(0xBC);
   for(i=0;i<10;i++){
-    Serial2.write(ROS_Output.toByte[i]);
+    Serial1.write(ROS_Output.toByte[i]);
   }
-  Serial2.write(0xDE);
+  Serial1.write(0xDE);
   
     
 }
@@ -248,8 +248,8 @@ void read_data(void){
     byte toByte[12];
   }joy_read;
   
-  while(Serial2.available()>0){
-     ch = Serial2.read();
+  while(Serial1.available()>0){
+     ch = Serial1.read();
      //Serial.write(ch);
      switch(read_data_count)
      {

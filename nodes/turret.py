@@ -1,56 +1,69 @@
 #!/usr/bin/env python
 
 ## PID control for yaw and pitch of turret towards target from target input from webcam
-## Subsribe to /front_cam/center topic to obtain state_x and state_y
+## Subsribe to /roi topic to obtain position data
 ## Publish angular velocity of turret to arduino through /vel_cmd topic
 
 import rospy
+import numpy as np
 from time import time
-from sensor_msgs.msg import Joy
-from geometry_msgs.msg import Vector3
+from sensor_msgs.msg import Joy, RegionOfInterest
 
+#global variables
 state_x = 0
 state_y = 0
+stash = []
 updatetime = time()
 
-def callback(data):
+#camera parameters
+xMax = rospy.get_param('/usb_cam/image_width') / 10
+yMax = rospy.get_param('/usb_cam/image_height') / 10
+
+def callback(roi):
     global updatetime
     updatetime = time()
-    global state_x
-    state_x = data.x
-    global state_y
-    state_y = data.y
+
+    #calculate center of roi
+    center = [0, 0]
+    center[0] = (roi.x_offset + roi.width/2) / 10
+    center[1] = (roi.y_offset + roi.height/2) / 10
+
+    global stash
+    if len(stash)==10:
+            del stash[0]
+    stash.append(center)
+
+    heatmap = np.zeros((xMax,yMax), dtype=np.uint8)
+    for ctr in stash:
+        heatmap[ctr[0], ctr[1]] += 1
+    
+    global state_x, state_y
+    state_x, state_y = np.unravel_index(heatmap.argmax(), heatmap.shape) #only first occurrence returned
 
 def turret():
-    global state_x
-    global state_y
-    global updatetime
+    global state_x, state_y, updatetime
     pub = rospy.Publisher('/vel_cmd', Joy, queue_size=10)
     rospy.init_node('turret', anonymous=True)
-    rospy.Subscriber('/center', Vector3, callback)
+    rospy.Subscriber('/roi', RegionOfInterest, callback)
     rate = rospy.Rate(10) # 10Hz
 
     # PID parameters
-    xMax = 640
-    yMax = 480
-    # outMin = 364
     outMin = 524
     outNeutral = 1024
-    # outMax = 1684
     outMax = 1524
+    # needs tuning again
+    Kp = 1.6
+    Ki = 0.001
+    Kd = 0.7
 
-    Kp = 0.51
-    Ki = 0
-    Kd = 0.6
-
-    target_x = 320
-    target_y = 240
+    target_x = xMax/2
+    target_y = yMax/2
     
     errorp_x = 0
     errorp_y = 0
 
     while not rospy.is_shutdown():
-        if time() - updatetime < 0.15:
+        if time() - updatetime < 3:
             error_x = target_x - state_x
             output_x = Kp*error_x + Ki*(error_x+errorp_x) + Kd*(error_x-errorp_x)
             output_x = outNeutral - output_x
@@ -62,7 +75,7 @@ def turret():
             errorp_x = error_x
             errorp_y = error_y
 
-            if abs(error_x) < 100 and abs(error_y) < 100:
+            if abs(error_x) < xMax/10 and abs(error_y) < yMax/6:
                 shoot = 1
             else:
                 shoot =0
@@ -76,12 +89,6 @@ def turret():
             
         output = Joy()
         output.buttons = [outNeutral, outNeutral, output_x, output_y, shoot]
-
-        # rospy.loginfo("x_pos = %d", state_x)
-        # rospy.loginfo("y_pos = %d", state_y)
-        # rospy.loginfo("yaw = %d", output.buttons[2])
-        # rospy.loginfo("pitch = %d", output.buttons[3])
-        # rospy.loginfo("shoot = %d", output.buttons[4])
 
         pub.publish(output)
         rate.sleep()

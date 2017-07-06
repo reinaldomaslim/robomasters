@@ -5,9 +5,12 @@
   reading result = dBus.channels[0-7]
 
 */
+#include <ros.h>
+#include <ros/time.h>
+#include <sensor_msgs/Joy.h>
 #include "DJI_DBUS.h"
 
-//there are two versions of DJI controller protocol
+//there are two versionsof DJI controller protocol
 // one is the latestest firmware with 25 bits with 7 channel
 //another is the old one with 6 channel of 18 bits
 //please use America coding methods
@@ -39,48 +42,47 @@ uint32_t updatetime = 0;
 #define CHANNEL_UP 1
 #define CHANNEL_MID 3
 #define CHANNEL_DOWN 2
-static uint16_t DBus_Output[channel]  = {1024, 1024, 1024, 1024, CHANNEL_MID, CHANNEL_UP};
+static uint16_t DBus_Output[channel]  = {1024, 1024, 1024, 1024, CHANNEL_MID, CHANNEL_MID};
 static uint16_t ROS_Output[channel]  = {1024, 1024, 1024, 1024, CHANNEL_MID, CHANNEL_MID};
 static uint16_t DBus_Final_Output[channel]  = {1024, 1024, 1024, 1024, CHANNEL_MID, CHANNEL_MID};
-
 //the value of channel can only be 1-3 , the sequence is 01,11,10
-//DBus_Output[LEFT_U] is the value of left up and down
-
-static union
-{
-  uint16_t joyData[channel+1]  = {1024, 1024, 1024, 1024, CHANNEL_MID, CHANNEL_MID};
-  byte toByte[12];
-}ROS_Upload;
-
+//DBus_Output[LEFT_UD] is the value of left up and down
 
 DJI_DBUS dBus(Serial1);
 int led = 13; 
-int reset = 22;
+int reset = 8;
 uint32_t currTime, displayTime = 0;
 uint8_t i;
 
 //ros
-void publish_joy(void);
-void read_joy_cmd(void);
+ros::NodeHandle nh;
+void joy_cb( const sensor_msgs::Joy& joy);
+ros::Subscriber<sensor_msgs::Joy> sub_joy("/vel_cmd", joy_cb);
+
 
 void setup(){
   pinMode(led, OUTPUT);
-  //Serial.begin(115200);
+  
+//  Serial.println("DBUS Status");
   Serial2.begin(100000,SERIAL_8E1);
   dBus.begin();
-  Serial3.begin(115200);
-  
+  //ros
+  nh.getHardware()->setBaud(57600);
+  nh.initNode();
+  nh.subscribe(sub_joy);
+  //Serial.begin(115200);
 }
 
 int joy_pub_count =0;
-
+boolean LED_flag = false;
 void loop(){
   
-  if (dBus.Failsafe() == DBUS_SIGNAL_OK) digitalWrite(led, HIGH);
+  if (dBus.Failsafe() == DBUS_SIGNAL_OK) LED_flag = true;
+  else LED_flag =false;
   dBus.FeedLine();
-  digitalWrite(led, LOW);
+  //digitalWrite(led, LOW);
   currTime = millis();
-  read_joy_cmd();
+
   if (dBus.toChannels == 1){
     dBus.UpdateChannels();
     dBus.toChannels = 0;
@@ -95,87 +97,18 @@ void loop(){
       displayTime = currTime + 7;
       joy_pub_count++;
       write18BitsDbusData();
-      if(joy_pub_count>2){
+     
+      if(joy_pub_count>10){
         joy_pub_count=0;
-        publish_joy();
+        nh.spinOnce();
       }
       //printDBUSStatus();
   }
-
-  
-}
-
-void read_joy_cmd( ){
-  //left button up means auto
-  //sequence : right_LR  right_UD  left_LR  left_UD
-  static int joy_cmd_flag=0;
-  static int joy_cmd_count=0;
-  static union
-  {
-    uint16_t joyData[5]  = {1024, 1024, 1024, 1024, 0};
-    byte toByte[10];
-  }joy_cmd;
-  while(Serial3.available()>0)   
-  {
-    unsigned char ch = Serial3.read();
-    switch(joy_cmd_flag)
-    {
-      case 0:
-        if(ch==0xFA)
-          joy_cmd_flag++;
-        else
-          joy_cmd_flag=0;
-        break;
-      case 1:
-        if(ch==0xBC)
-        {
-          joy_cmd_count=0;
-          joy_cmd_flag++;
-        }
-        else
-          joy_cmd_flag=0;
-        break;
-      case 2:
-        joy_cmd.toByte[joy_cmd_count]=ch;
-        joy_cmd_count++;
-        if(joy_cmd_count>=10){
-          joy_cmd_count=0;
-  	      joy_cmd_flag++;
-	      }
-	      break;
-      case 3:
-	      if(ch==0xDE)
-	        joy_cmd_flag++;
-      	else
-	        joy_cmd_flag=0;
-	      break;
-      case 4:
-      	updatetime = millis();
-        ROS_Output[RIGHT_LR] = joy_cmd.joyData[0];
-        ROS_Output[RIGHT_UD] = joy_cmd.joyData[1];
-        ROS_Output[LEFT_LR] = joy_cmd.joyData[2];
-        ROS_Output[LEFT_UD] = joy_cmd.joyData[3];
-        if(DBus_Output[CHANNEL_L] != CHANNEL_UP) ROS_Output[CHANNEL_L] = CHANNEL_MID;
-        else ROS_Output[CHANNEL_L] = shooting(joy_cmd.joyData[4]);
-	      joy_cmd_flag=0;
-        break;
-			 
-      default:
-	      joy_cmd_flag=0;
-	      break;		 
-    }
-  }
-
-}
-
-void publish_joy(void){
-  Serial3.write(0xFA);
-  Serial3.write(0xBC);
-  //upload_data_display();
-  for(i=0;i<12;i++){
-    Serial3.write(ROS_Upload.toByte[i]);
-  }
-  Serial3.write(0xDE);
+    
+  if(LED_flag)
+    digitalWrite(led, HIGH);
+  else 
+    digitalWrite(led, LOW);
 }
 
 int shooting(int cmd){
@@ -216,35 +149,47 @@ int shooting(int cmd){
   else if (shoot==3) return (uint16_t)CHANNEL_UP;
 }
 
+void joy_cb( const sensor_msgs::Joy& joy){
+  updatetime = millis();
+  //left button up means auto
+  //sequence : left  right_UD  right_LR
+    ROS_Output[LEFT_LR] = (uint16_t)(joy.buttons[2]);
+    ROS_Output[LEFT_UD] = (uint16_t)(joy.buttons[3]);
+    ROS_Output[RIGHT_LR] = (uint16_t)(joy.buttons[0]);
+    ROS_Output[RIGHT_UD] = (uint16_t)(joy.buttons[1]);
+    if (DBus_Output[CHANNEL_R] == CHANNEL_UP) ROS_Output[CHANNEL_L] = shooting(joy.buttons[4]);
+    else ROS_Output[CHANNEL_L] = CHANNEL_MID;
+}
 void write18BitsDbusData(){
   //05 04 20 00 01 D8 00 00 00 00 00 00 00 00 00 00 00 00 original 
-  //00 04 20 00 01 58 00 00 00 00 00 00 00 00 00 00 00 00 adjusted
-      
+  //00 04 20 00 01 58 00 00 00 00 00 00 00 00 00 00 00 00 adjusted    
   
-  
-  DBus_Final_Output[CHANNEL_R] = DBus_Output[CHANNEL_R];
-  if(DBus_Output[CHANNEL_L] == CHANNEL_UP && currTime - updatetime < 500){
+  if(DBus_Output[CHANNEL_R] == CHANNEL_UP && currTime - updatetime < 500){
     //auto mode
     DBus_Final_Output[LEFT_UD] = ROS_Output[LEFT_UD];
     DBus_Final_Output[LEFT_LR] = ROS_Output[LEFT_LR];
     DBus_Final_Output[RIGHT_UD] = ROS_Output[RIGHT_UD];
     DBus_Final_Output[RIGHT_LR] = ROS_Output[RIGHT_LR];
     DBus_Final_Output[CHANNEL_L] = ROS_Output[CHANNEL_L];
+    
   }else{
-    DBus_Final_Output[CHANNEL_L] = shooting(0);
+    if (DBus_Output[CHANNEL_R] == CHANNEL_DOWN) DBus_Final_Output[CHANNEL_R] = CHANNEL_DOWN;
+    else DBus_Final_Output[CHANNEL_R] = CHANNEL_UP;
     DBus_Final_Output[LEFT_UD] = DBus_Output[LEFT_UD];
     DBus_Final_Output[LEFT_LR] = DBus_Output[LEFT_LR];
     DBus_Final_Output[RIGHT_UD] = DBus_Output[RIGHT_UD];
     DBus_Final_Output[RIGHT_LR] = DBus_Output[RIGHT_LR];
+    if (shoot==0 && (currTime - lastChange) > chgTime) DBus_Final_Output[CHANNEL_L] = DBus_Output[CHANNEL_L];
+    else DBus_Final_Output[CHANNEL_L] = shooting(0);
   }
-
+  
   //add safety system
   if (DBus_Output[CHANNEL_L] == 0 && DBus_Output[CHANNEL_R]==0 && dBus.updatetime > 1000) {
     pinMode(reset, OUTPUT);
     digitalWrite(reset, LOW);
   }
   
-  if(currTime - dBus.updatetime > 500){
+  if(currTime - dBus.updatetime > 500){  
     DBus_Output[CHANNEL_L] = CHANNEL_MID;
     DBus_Final_Output[CHANNEL_L] = shooting(0);
     if (shoot==0) DBus_Final_Output[CHANNEL_R] = CHANNEL_MID;
@@ -253,6 +198,7 @@ void write18BitsDbusData(){
     DBus_Final_Output[RIGHT_UD] = 1024;
     DBus_Final_Output[RIGHT_LR] = 1024;
     DBus_Final_Output[LEFT_UD] = 1024;
+    LED_flag = false;
   }
   
   if(DBus_Final_Output[RIGHT_LR]>1524)
@@ -293,10 +239,11 @@ void write18BitsDbusData(){
         DBus_Final_Output[RIGHT_UD]=824;
   }
   
-  for(i = 0;i<channel;i++){
-    ROS_Upload.joyData[i] = DBus_Final_Output[i];
-  }
+  
+  
+  
 
+    
   Serial2.write((uint8_t) ( ((DBus_Final_Output[0]&0x00FF)>>0) ) );//data1 0-7
   Serial2.write((uint8_t) ( ((DBus_Final_Output[0]&0x0700)>>8) | ((DBus_Final_Output[1]&0x001F)<<3) ) );//data1 8-10 data2 0-4 
   Serial2.write((uint8_t) ( ((DBus_Final_Output[1]&0x07E0)>>5) | ((DBus_Final_Output[2]&0x0003)<<6) ) );// data2 5-10 data3 0-1
@@ -316,17 +263,6 @@ void write18BitsDbusData(){
   Serial2.write(0x00);
   Serial2.write(0x00);
 }
-
-void upload_data_display()
-{
-  for(i =0;i<6;i++){
-    Serial.print(ROS_Upload.joyData[i]);
-    Serial.print("\t");
-  }
-  Serial.println(".");
-  
-}
-
 void printDBUSStatus()
 {
   Serial.print("Thr ");

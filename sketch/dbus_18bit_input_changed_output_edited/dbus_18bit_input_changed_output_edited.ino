@@ -53,6 +53,7 @@ static float ROS_Localization_Upload[6]  = {0, 0, 0, 0, 0, 0};
 
 DJI_DBUS dBus(Serial1);
 int led = 13; 
+int reset = 8;
 uint32_t currTime, displayTime = 0;
 uint8_t i;
 
@@ -64,13 +65,15 @@ void readLocalizationSystem(void);
 void publish_localization(void);
 sensor_msgs::Joy joy_msg;
 geometry_msgs::Twist localization_msg;
-ros::Subscriber<sensor_msgs::Joy> sub_joy("/cmd_vel", joy_cb);
+ros::Subscriber<sensor_msgs::Joy> sub_joy("/vel_cmd", joy_cb);
 ros::Publisher pub_joy( "/joy_msg", &joy_msg);
 ros::Publisher pub_localization( "/localization", &localization_msg);
 char frameid[] = "/joy_msg";
 
 
 void setup(){
+  pinMode(reset, OUTPUT);
+  digitalWrite(reset, HIGH);
   pinMode(led, OUTPUT);
   
 //  Serial.println("DBUS Status");
@@ -303,7 +306,9 @@ void write18BitsDbusData(){
   }
   
   //add safety system
-  if(currTime - dBus.updatetime > 500 || DBus_Output[CHANNEL_L] == 0||DBus_Output[CHANNEL_R]==0){  
+  if (DBus_Output[CHANNEL_L] == 0 && DBus_Output[CHANNEL_R]==0) digitalWrite(reset, LOW);
+  
+  if(currTime - dBus.updatetime > 500){  
     DBus_Output[CHANNEL_L] = CHANNEL_MID;
     DBus_Final_Output[CHANNEL_L] = shooting(0);
     if (shoot==0) DBus_Final_Output[CHANNEL_R] = CHANNEL_MID;
