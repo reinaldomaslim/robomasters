@@ -12,7 +12,7 @@ class TfBroadcaster(object):
     initialize_localizer=True
 
     #the cg of robot when firstly launched wrt to map frame
-    cg_origin=[-0.210, 0.265]
+    cg_origin=[0, 0]
 
 
     def __init__(self, nodename):
@@ -35,17 +35,17 @@ class TfBroadcaster(object):
                              "base_link")
 
             #localizer tf
-            br.sendTransform((-0.048, -0.12, 0),
+            br.sendTransform((0, -0.048, 0),
                              tf.transformations.quaternion_from_euler(0, 0, 0),
                              rospy.Time.now(),
                              "encoder",
                              "base_link")
 
-            br.sendTransform((0, 0, 0),
-                             tf.transformations.quaternion_from_euler(0, 0, 0),
-                             rospy.Time.now(),
-                             "base_link",
-                             "odom")
+            # br.sendTransform((0, 0, 0),
+            #                  tf.transformations.quaternion_from_euler(0, 0, 0),
+            #                  rospy.Time.now(),
+            #                  "base_link",
+            #                  "odom")
 
             #will be given by rplidar slam gmapping
             br.sendTransform((0, 0, 0),

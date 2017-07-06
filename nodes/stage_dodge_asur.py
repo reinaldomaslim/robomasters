@@ -82,19 +82,19 @@ class BaseDodge(object):
 
         #self.initMarker()
 
-        rate=rospy.Rate(10)
+        rate=rospy.Rate(30)
     
         while not rospy.is_shutdown():
-            self.passive_dodge()
-            # if len(self.clustered_enemy_pos)==1:
-            #     #if only one, active dodging 
-            #     self.active_dodge()
-            #     print("enemy detected")
-            #     print(len(self.clustered_enemy_pos))                
-            # else:
-            #     #more than one, passive dodge
-            #     self.passive_dodge()
-            #     print("passive dodge")
+            #self.passive_dodge()
+            if len(self.clustered_enemy_pos)==1:
+                #if only one, active dodging 
+                self.active_dodge()
+                #print("enemy detected")
+                print(len(self.clustered_enemy_pos))                
+            else:
+                #more than one, passive dodge
+                self.passive_dodge()
+                #print("passive dodge")
 
             rate.sleep()
 
@@ -115,25 +115,39 @@ class BaseDodge(object):
 
         #rotate to face target
         heading=math.atan2(target[1]-self.y0, target[0]-self.x0)
-        heading_threshold=50*math.pi/180
+        print(heading*180/math.pi)
+        print(self.yaw0*180/math.pi)
+        print(abs(heading-self.yaw0)*180/math.pi)
+        heading_threshold=5*math.pi/180
         difference=abs(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading)))
 
         if difference>heading_threshold:
 
-            print("rotate")
+            #print("rotate")
             print(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading))*180/math.pi)
             self.rotate(heading)
         else:
-            print("translate")
-            d=0.3
+            
+            #print("translate")
+            d=0.27
+            
             #direction to the left
             beta1=heading+math.pi/2
             #direction to the right
             beta2=heading-math.pi/2
 
-            #predict position a timestep ahead
-            pred1=[self.x0+d*math.cos(beta1), self.y0+d*math.sin(beta1)]
-            pred2=[self.x0+d*math.cos(beta2), self.y0+d*math.sin(beta2)]
+                #check if out of radius, assume middle of the arena is origin
+            if math.sqrt(self.x0**2+self.y0**2)>0.7:
+                #add to origin vector
+                delta=math.atan2(-self.y0, -self.x0)
+                #print(delta*180/math.pi)
+                pred1=[self.x0+d*math.cos(beta1)+0.1*math.cos(delta), self.y0+d*math.sin(beta1)+0.1*math.sin(delta)]
+                pred2=[self.x0+d*math.cos(beta2)+0.1*math.cos(delta), self.y0+d*math.sin(beta2)+0.1*math.sin(delta)]
+            else:
+                #predict position a timestep ahead
+                pred1=[self.x0+d*math.cos(beta1), self.y0+d*math.sin(beta1)]
+                pred2=[self.x0+d*math.cos(beta2), self.y0+d*math.sin(beta2)]
+
 
             heading1=math.atan2(target[1]-pred1[1], target[0]-pred1[0])
             heading2=math.atan2(target[1]-pred2[1], target[0]-pred2[0])
@@ -231,6 +245,7 @@ class BaseDodge(object):
 
 
     def translate(self, x_target, y_target, angle):
+        #print(angle*180/math.pi)
         msg=Twist()
         # vel=200 #must be small to avoid jerking, and secondly to avoid switching surface
         # distance_threshold=0.1

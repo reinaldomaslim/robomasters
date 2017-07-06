@@ -9,12 +9,15 @@
 
     <!--tf broadcaster-->
     <node name="tf_broadcaster" pkg="robomasters" type="tf_broadcaster.py" respawn="true" />
-
+    
+    <!--detect enemy-->
+    <node name="detect_enemy" pkg="robomasters" type="detect_enemy.py" respawn="true" />
+    
     <!--camera masking-->
     <node name="camera_masking" pkg="robomasters" type="camera_masking.py" respawn="true" />
 
-    <!--detect enemy-->
-    <node name="detect_enemy" pkg="robomasters" type="detect_enemy.py" respawn="true" />
+    <!--armor detection, set blue or red-->
+    <include file="$(find base_vision)/launch/armor_detection.launch" />
     
     <!--dodging and shooting-->
     <node name="dodge_and_shoot" pkg="robomasters" type="dodge_and_shoot.py" respawn="true" />
