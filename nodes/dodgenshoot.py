@@ -4,8 +4,6 @@
 reinaldo and yan paing oo 
 active and passive dodging for Robomasters base 
 """
-
-
 import rospy
 import actionlib
 import numpy as np
@@ -25,26 +23,29 @@ from sklearn.preprocessing import StandardScaler, normalize
 from collections import Counter
 from time import time
 
-class BaseDodge(object):
+class MissionPlanner(object):
     x0, y0, yaw0= 0, 0, 0
     enemy_pos=[]
-    clustered_enemy_pos=[]
 
     ## Movement PID constants
     del_T = 100.0   # time step in ms
-    p_ang = 450.0
-    i_ang = 0.0
-    d_ang = 250.0
-    p_x = 250.0
-    i_x = 0.6
-    d_x = 200.0
+    
+    p_ang =140.0 #140, 140
+    i_ang = .02 #0.013, 0.01
+    d_ang = 55000.0 #50000, 56000
 
-    p_y = 240.0
-    i_y = 0.9
-    d_y = 200.0
+    p_x = 450.0 #350
+    i_x = 0.1 #0.2
+    d_x = 100.0 #200, 300
 
-    lin_vel_thres = 350.0 # max 660
-    ang_vel_thres = 130.0 # max 660
+    p_y = 550.0 #600
+    i_y = 0.1 #0.1
+    d_y = 100.0 #120, 180
+
+
+    x_lin_vel_thres = 660.0 # max 660
+    y_lin_vel_thres=660
+    ang_vel_thres = 660.0 # max 660
     bias = 1024.0
     pre_ang_error = 0.0
     pre_x_error = 0.0
@@ -53,7 +54,7 @@ class BaseDodge(object):
     x_integral = 0.0
     y_integral = 0.0
     lin_integral_threshold = 50.0
-    ang_integral_threshold = 50.0
+    ang_integral_threshold = 20.0
 
     # path function parameters
     T_step =100.0   #time step in ms, 10Hz
@@ -73,16 +74,16 @@ class BaseDodge(object):
     #turret control params
     updatetime = time()
     stash = []
-    xMax = rospy.get_param('/usb_cam/image_width') / 10
-    yMax = rospy.get_param('/usb_cam/image_height') / 10
+    #xMax = rospy.get_param('/usb_cam/image_width') / 10
+    #yMax = rospy.get_param('/usb_cam/image_height') / 10
 
     # needs tuning again
     Kp = 1.6
     Ki = 0.001
     Kd = 0.8
 
-    target_x = xMax/2
-    target_y = yMax/2
+    #target_x = xMax/2
+    #target_y = yMax/2
     errorp_x = 0
     errorp_y = 0
 
@@ -96,39 +97,49 @@ class BaseDodge(object):
 
     def __init__(self, nodename):
         rospy.init_node(nodename, anonymous=False)
-    
+        print self.d_ang
         rospy.Subscriber("/odometry", Odometry, self.odom_callback, queue_size = 50)
-        rospy.Subscriber("/enemy_yolo", Marker, self.enemy_callback, queue_size = 50)
-        rospy.Subscriber('/roi', RegionOfInterest, self.armor_callback, queue_size = 50)
+        #rospy.Subscriber("/enemy_yolo", Marker, self.enemy_callback, queue_size = 50)
+        #rospy.Subscriber('/roi', RegionOfInterest, self.armor_callback, queue_size = 50)
         self.cmd_vel_pub=rospy.Publisher("/cmd_vel", Joy, queue_size=10)
 
-        #self.initMarker()
-
         rate=rospy.Rate(10)
-    
+        msg=Joy()
+
+        heading_threshold=20*math.pi/180
         while not rospy.is_shutdown():
-            
-            if len(self.clustered_enemy_pos)==1:
-                #if only one, active dodging 
-                self.active_dodge()      
-            else:
-                #more than one, passive dodge
-                self.passive_dodge()
-            
-            msg=Joy()
-            
-            #do priority that governs yawing (lidar or vision)
-            if time() - self.updatetime < 3:
-                #armor detected
-                msg.buttons=[self.cmd_x, self.cmd_y, self.cmd_yaw_turret, self.cmd_pitch, self.cmd_shoot]
+            self.translate(0, 0, 0)
+            #self.passive_dodge()
 
-            else:
-                self.state_x=0
-                self.state_y=0
-                self.cmd_shoot=0
-                self.cmd_pitch=self.bias
-                msg.buttons=[self.cmd_x, self.cmd_y, self.cmd_yaw, self.cmd_pitch, self.cmd_shoot]
+            # if abs(self.yaw0-0)>heading_threshold:
+            #     self.rotate(0)
+            # else:
+            #     #else translate to goal    
+            #     self.translate(0, 0, 0)
+            # if len(self.enemy_pos)==1:
+            #     #if only one, active dodging 
+            #     self.active_dodge()      
+            # else:
+            #     #more than one, passive dodge
+            #     continue
+            
+            # msg=Joy()
+            
+            # #do priority that governs yawing (lidar or vision)
+            # if time() - self.updatetime < 3:
+            #     #update time is only updated in shooting mode. armor detected
+            #     msg.buttons=[self.cmd_x, self.cmd_y, self.cmd_yaw_turret, self.cmd_pitch, self.cmd_shoot]
 
+            # else:
+            #     #no shooting, dodge and reset turret pid
+            #     self.state_x=0
+            #     self.state_y=0
+            #     self.cmd_shoot=0
+            #     self.cmd_pitch=self.bias
+            #     msg.buttons=[self.cmd_x, self.cmd_y, self.cmd_yaw, self.cmd_pitch, self.cmd_shoot]
+            msg.buttons=[int(self.cmd_x), int(self.cmd_y), int(self.cmd_yaw), int(self.cmd_pitch), int(self.cmd_shoot)]
+            #msg.buttons=[int(self.cmd_x), 1024, int(self.cmd_yaw), int(self.cmd_pitch), int(self.cmd_shoot)]
+            print(msg)
             self.cmd_vel_pub.publish(msg)
 
             rate.sleep()
@@ -142,19 +153,13 @@ class BaseDodge(object):
         self.cmd_vel_pub.publish(msg)
 
     def active_dodge(self):
-
-        if len(self.clustered_enemy_pos)==2:
-            target=np.average(np.asarray(self.clustered_enemy_pos))
-
-
-        target=self.clustered_enemy_pos[0]
+        
+        target=self.enemy_pos[0]
 
         #rotate to face target
         heading=math.atan2(target[1]-self.y0, target[0]-self.x0)
-        print(heading*180/math.pi)
-        print(self.yaw0*180/math.pi)
-        print(abs(heading-self.yaw0)*180/math.pi)
-        heading_threshold=5*math.pi/180
+        heading_threshold=25*math.pi/180
+
         difference=abs(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading)))
 
         if difference>heading_threshold:
@@ -165,14 +170,15 @@ class BaseDodge(object):
         else:
             
             #print("translate")
-            d=0.27
+            #the higher d, the faster 
+            d=0.4
             
             #direction to the left
             beta1=heading+math.pi/2
             #direction to the right
             beta2=heading-math.pi/2
 
-                #check if out of radius, assume middle of the arena is origin
+            #check if out of radius, assume middle of the arena is origin
             if math.sqrt(self.x0**2+self.y0**2)>0.7:
                 #add to origin vector
                 delta=math.atan2(-self.y0, -self.x0)
@@ -221,33 +227,33 @@ class BaseDodge(object):
     def passive_dodge(self):
 
         if self.path == 1:
-            ref_x = self.x_plot(self.t,0,0.7,0.25)
-            ref_y = self.y_plot(self.t,0,0.7,0.25)
+            ref_x = self.x_plot(self.t,0,0.5,0.25)
+            ref_y = self.y_plot(self.t,0,0.5,0.25)
 
 
         elif self.path == 2:
-            ref_x = self.x_plot(self.t,-26,-0.45,-0.625)
-            ref_y = self.y_plot(self.t,26,0.45,0.625)
+            ref_x = self.x_plot(self.t,-26,-0.45,-0.5)
+            ref_y = self.y_plot(self.t,26,0.45,0.5)
 
 
         elif self.path == 3:
-            ref_x = self.x_plot(self.t,-26,0.45,0.625)
-            ref_y = self.y_plot(self.t,-26,0.45,0.625)
+            ref_x = self.x_plot(self.t,-26,0.45,0.5)
+            ref_y = self.y_plot(self.t,-26,0.45,0.5)
 
 
         elif self.path == 4:
-            ref_x = self.x_plot(self.t,0,-0.7,-0.25)
-            ref_y = self.y_plot(self.t,0,0.7,0.25)
+            ref_x = self.x_plot(self.t,0,-0.5,-0.25)
+            ref_y = self.y_plot(self.t,0,0.5,0.25)
 
 
         elif self.path == 5:
-            ref_x = self.x_plot(self.t,26,0.45,0.625)
-            ref_y = self.y_plot(self.t,26,0.45,0.625)
+            ref_x = self.x_plot(self.t,26,0.45,0.5)
+            ref_y = self.y_plot(self.t,26,0.45,0.5)
 
 
         elif self.path == 6:
-            ref_x = self.x_plot(self.t,26,-0.45,-0.625)
-            ref_y = self.y_plot(self.t,-26,0.45,0.625)
+            ref_x = self.x_plot(self.t,26,-0.45,-0.5)
+            ref_y = self.y_plot(self.t,-26,0.45,0.5)
 
  
         if self.t > self.counter*35:
@@ -263,17 +269,21 @@ class BaseDodge(object):
         #print("Time    : ",self.t)
         #print("Counter : ",self.counter)
 
-        if self.inside_arena([ref_x, ref_y])==True:
-            #if target is inside arena
-            if self.path < 4:
-                self.translate(ref_x, ref_y, self.yaw0 + 3*self.path)
-            else:
-                self.translate(ref_x, ref_y, self.yaw0 - 3*self.path)
+        if self.x0 > 0.5 or self.y0> 0.5:
+            print("return")
+            self.translate(0, 0, 0)
+        else:
+            if self.inside_arena([ref_x, ref_y])==True:
+                #if target is inside arena
+                if self.path < 4:
+                    self.translate(ref_x, ref_y, self.yaw0 + 3*self.path)
+                else:
+                    self.translate(ref_x, ref_y, self.yaw0 - 3*self.path)
 
     def inside_arena(self, pos):
         #check whether pos is inside arena, assuming origin 0,0 in middle
         #border [x_min, x_max, y_min, y_max]
-        borders=[-1, 1, -1, 1]
+        borders=[-0.7, 0.7, -0.7, 0.7]
         if pos[0]<borders[0] or pos[0]>borders[1] or pos[1]<borders[2] or pos[1]>borders[3]:
             return False
         return True
@@ -284,7 +294,6 @@ class BaseDodge(object):
         x_error=(x_target-self.x0)*math.cos(self.yaw0)+(y_target-self.y0)*math.sin(self.yaw0)
         y_error=-(x_target-self.x0)*math.sin(self.yaw0)+(y_target-self.y0)*math.cos(self.yaw0)
         ang_error=math.atan2(math.sin(angle-self.yaw0), math.cos(angle-self.yaw0))
-
 
         x_derivative = (x_error - self.pre_x_error) / self.del_T
         y_derivative = (y_error - self.pre_y_error) / self.del_T
@@ -311,37 +320,30 @@ class BaseDodge(object):
         
         # output velocities
         x_linear_vel = (self.p_x * x_error) + (self.d_x * x_derivative) + (self.i_x * self.x_integral)
-        if x_linear_vel > self.lin_vel_thres:
-            x_linear_vel = self.lin_vel_thres
-        elif x_linear_vel < -self.lin_vel_thres:
-            x_linear_vel = -self.lin_vel_thres
 
-        if abs(x_linear_vel)>450:
-            x_linear_vel=x_linear_vel*450/abs(x_linear_vel)
-
+        if abs(x_linear_vel)>self.x_lin_vel_thres:
+            x_linear_vel=x_linear_vel*self.x_lin_vel_thres/abs(x_linear_vel)
 
         self.cmd_x = self.bias + x_linear_vel
 
         y_linear_vel = (self.p_y * y_error) + (self.d_y * y_derivative) + (self.i_y * self.y_integral)
-        if y_linear_vel > self.lin_vel_thres:
-            y_linear_vel = self.lin_vel_thres
-        elif y_linear_vel < -self.lin_vel_thres:
-            y_linear_vel = -self.lin_vel_thres
 
-
-        if abs(y_linear_vel)>220:
-            y_linear_vel=y_linear_vel*220/abs(y_linear_vel)
+        if abs(y_linear_vel)>self.y_lin_vel_thres:
+            y_linear_vel=y_linear_vel*self.y_lin_vel_thres/abs(y_linear_vel)
 
         self.cmd_y = self.bias - y_linear_vel
 
+        print(self.d_ang *ang_derivative)
+        print(self.p_ang * ang_error)
+
         angular_vel = (self.p_ang * ang_error) + (self.d_ang * ang_derivative) + (self.i_ang * self.ang_integral)
-        if angular_vel > self.ang_vel_thres:
-            angular_vel = self.ang_vel_thres
-        elif angular_vel < -self.ang_vel_thres:
-            angular_vel = -self.ang_vel_thres
+
+
+        if abs(angular_vel)>self.ang_vel_thres:
+            angular_vel=angular_vel*self.ang_vel_thres/abs(angular_vel)
+
 
         self.cmd_yaw = self.bias - angular_vel
-
 
         self.pre_x_error = x_error
         self.pre_y_error = y_error
@@ -353,18 +355,19 @@ class BaseDodge(object):
         ang_error=math.atan2(math.sin(angle-self.yaw0), math.cos(angle-self.yaw0))
         derivative = (ang_error - self.pre_ang_error) / self.del_T
         self.ang_integral += ang_error * self.del_T
+
         if self.ang_integral > self.ang_integral_threshold:
             self.ang_integral = self.ang_integral_threshold
         elif self.ang_integral < -self.ang_integral_threshold:
             self.ang_integral = -self.ang_integral_threshold
+
+        print(self.d_ang * derivative)
+        
         angular_vel = (self.p_ang * ang_error) + (self.d_ang * derivative) + (self.i_ang * self.ang_integral)
 
 
-        if angular_vel > self.ang_vel_thres:
-            angular_vel = self.ang_vel_thres
-        elif angular_vel < -self.ang_vel_thres:
-            angular_vel = -self.ang_vel_thres
-
+        if abs(angular_vel)>self.ang_vel_thres:
+            angular_vel=angular_vel*self.ang_vel_thres/abs(angular_vel)
 
         self.cmd_x=self.bias
         self.cmd_y=self.bias
@@ -377,9 +380,9 @@ class BaseDodge(object):
 
     def enemy_callback(self, msg):
 
-        self.clustered_enemy_pos=[]
+        self.enemy_pos=[]
         for point in msg.points:
-            self.clustered_enemy_pos.append([point.x, point.y])
+            self.enemy_pos.append([point.x, point.y])
     
 
 
@@ -424,59 +427,11 @@ class BaseDodge(object):
         self.y0 = msg.pose.pose.position.y
         _, _, self.yaw0 = euler_from_quaternion((msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w))
         self.odom_received = True
-
-    def print_marker(self, mark):
-        self.markers.points=list()
-        if mark is None:
-            return
-
-        for x in mark:
-            #markerList store points wrt 2D world coordinate
-            
-            p=Point()
-
-            p.x=x[0]
-            p.y=x[1]
-            p.z=0
-
-            self.markers.points.append(p)
-        self.markers_pub.publish(self.markers)
-
-    def initMarker(self):
-        # Set up our waypoint markers
-        print("initializing markers")
-        marker_scale = 0.2
-        marker_lifetime = 0  # 0 is forever
-        marker_ns = 'markers'
-        marker_id = 0
-        marker_color = {'r': 0.7, 'g': 0.5, 'b': 1.0, 'a': 1.0}
-
-        # Define a marker publisher.
-        self.markers_pub = rospy.Publisher('clustered_enemy', Marker, queue_size=5)
-
-        # Initialize the marker points list.
-        self.markers = Marker()
-        self.markers.ns = marker_ns
-        self.markers.id = marker_id
-        # self.markers.type = Marker.ARROW
-        self.markers.type = Marker.CUBE_LIST
-        self.markers.action = Marker.ADD
-        self.markers.lifetime = rospy.Duration(marker_lifetime)
-        self.markers.scale.x = marker_scale
-        self.markers.scale.y = marker_scale
-        self.markers.scale.z = marker_scale
-        self.markers.color.r = marker_color['r']
-        self.markers.color.g = marker_color['g']
-        self.markers.color.b = marker_color['b']
-        self.markers.color.a = marker_color['a']
-
-        self.markers.header.frame_id = 'odom'
-        self.markers.header.stamp = rospy.Time.now()
-        self.markers.points = list()
   
 
 if __name__ == '__main__':
     try:
-        BaseDodge(nodename="base_dodging")
+
+        MissionPlanner(nodename="mission_planner")
     except rospy.ROSInterruptException:
-        rospy.loginfo("dodging exit.")
+        rospy.loginfo("base mission planner exit.")

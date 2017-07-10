@@ -10,26 +10,24 @@ import math
 
 class TfBroadcaster(object):
     initialize_localizer=True
-
+    
     #the cg of robot when firstly launched wrt to map frame
     cg_origin=[0, 0]
-
 
     def __init__(self, nodename):
         rospy.init_node('tf_broadcaster')
         listener = tf.TransformListener()
         rospy.Subscriber("/localization", Twist, self.encoderCallback, queue_size = 10)
-        #self.odom_pub=rospy.Publisher("/odometry", Odometry, queue_size=10)
         self.odom_pub=rospy.Publisher("/odometry", Odometry, queue_size=10)
 
-        r = rospy.Rate(100)
+        r = rospy.Rate(30)
 
         while not rospy.is_shutdown():
 
             br = tf.TransformBroadcaster()
-            #laser tf
-            br.sendTransform((0.0, 0.0, 0),
-                             tf.transformations.quaternion_from_euler(0, 0, math.pi),
+            #laser tf, x only
+            br.sendTransform((0.215, 0.0, 0),
+                             tf.transformations.quaternion_from_euler(0, 0, -math.pi/2),
                              rospy.Time.now(),
                              "laser",
                              "base_link")
@@ -69,8 +67,11 @@ class TfBroadcaster(object):
 
         #for subsequent, modify the reading to compensate
         else:
-            linear_x=msg.linear.x-self.x_off-self.cg_origin[0]
-            linear_y=msg.linear.y-self.y_off-self.cg_origin[1]
+            p=msg.linear.x-self.x_off
+            q=msg.linear.y-self.y_off
+
+            linear_x=p*math.cos(self.yaw_off*math.pi/180)+q*math.sin(self.yaw_off*math.pi/180)
+            linear_y=-p*math.sin(self.yaw_off*math.pi/180)+q*math.cos(self.yaw_off*math.pi/180)
             angular_z=msg.angular.z-self.yaw_off
 
             #broadcast odom tf
@@ -99,9 +100,6 @@ class TfBroadcaster(object):
             q.x, q.y, q.z, q.w=tf.transformations.quaternion_from_euler(0, 0, angular_z*math.pi/180)
             odom.pose.pose.orientation=q
             self.odom_pub.publish(odom)
-
-
-
 
 
 if __name__ == '__main__':

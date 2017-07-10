@@ -29,7 +29,7 @@ class CameraMasking(object):
     start=[]
     end=[]
 
-    cam_x_offset=0.35
+    cam_x_offset=0 #offset from lidar
 
     def __init__(self):
         
@@ -38,7 +38,8 @@ class CameraMasking(object):
         #publish enemy clustered over time
         #self.initMarker()
         self.image_pub =rospy.Publisher("/image_rect_color_masked", Image, queue_size=10)
-
+        
+        rospy.Subscriber("/odometry", Odometry, self.odom_callback, queue_size = 50)
 
         rospy.Subscriber("/image_rect_color", Image, self.img_callback, queue_size = 50)
         rospy.Subscriber("/enemy_yolo", Marker, self.enemy_callback, queue_size = 50)

@@ -25,23 +25,31 @@ from collections import Counter
 class FindEnemy(object):
     x0, y0, yaw0= 0, 0, 0
     currentScan=LaserScan()
-    lookback=2 #lookback to the previous scans, if 0 means yolo
-    radius=2 #radius for detections, rplidar max is 6m
+    lookback=3 #lookback to the previous scans, if 0 means yolo
+    radius=5 #radius for detections, rplidar max is 6m
     counter=0
     grid=[]
 
+    x0, y0, yaw0=0,0, 0
+
+    wall_x=-2.8
+    wall_y=-2.8
+
+    x_off=0.215
     #ignore detections on own body, units in angle
-    own_body=[]
+
 
     def __init__(self, nodename):
         rospy.init_node(nodename, anonymous=False)
     
         self.initMarker()
 
+        # Define a marker publisher.
+        self.markers_pub = rospy.Publisher('/enemy_yolo', Marker, queue_size=5)
+
         rospy.Subscriber("/odometry", Odometry, self.odom_callback, queue_size = 50)
         rospy.Subscriber("/scan", LaserScan, self.scan_callback, queue_size = 50)
-        #self.enemy_pose_pub=rospy.Publisher("/enemy", PoseStamped, queue_size=10)
-
+        
         rate=rospy.Rate(10)
     
         while not rospy.is_shutdown():
@@ -51,21 +59,20 @@ class FindEnemy(object):
 
     def scan_callback(self, msg):
 
-        for mask in own_body:
-            msg.ranges[mask[0]:mask[1]]=100
-
         if self.counter>self.lookback:
             self.counter=0
         if self.counter==0:
+            #refresh
             self.grid=[]
 
         for i in range(len(msg.ranges)):
 
             if msg.ranges[i]<self.radius:
-                theta=i*msg.angle_increment#-math.pi/4
+                theta=math.atan2(math.sin(i*msg.angle_increment+self.yaw0), math.cos(i*msg.angle_increment+self.yaw0))#-math.pi/2
                 d=msg.ranges[i]
-                x=d*math.cos(theta)
-                y=d*math.sin(theta)
+                x=-d*math.sin(theta)+self.x_off+self.x0
+                y=d*math.cos(theta)+self.y0
+                #print(x, y)
                 self.grid.append([x, y])
                 
         #print(grid)
@@ -76,15 +83,9 @@ class FindEnemy(object):
         
 
     def detect_enemy(self, grid):
-        # msg=PoseStamped()
-        #origin=int(grid.shape[0]/2)
-        #X=normalize(grid)
-        
-        #this line takes longest time to run 
-        #D = manhattan_distances(frontiers_array, frontiers_array)
+
         X = StandardScaler().fit_transform(grid)
-        db = DBSCAN(eps=0.5, min_samples=10).fit(X)
-        #db = DBSCAN(eps=0.5, min_samples=5, algorithm='ball_tree', metric='haversine').fit(X)
+        db = DBSCAN(eps=0.2, min_samples=4).fit(X)
         
         core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
         core_samples_mask[db.core_sample_indices_] = True
@@ -102,19 +103,14 @@ class FindEnemy(object):
             kmeans=KMeans(n_clusters=1).fit(cluster)
             center=kmeans.cluster_centers_
 
-            pos_x=-center[0][0]
+            pos_x=center[0][0]
             pos_y=center[0][1]
-            cluster_centers.append([-pos_x, pos_y])
 
+            if pos_x<self.wall_x or pos_y<self.wall_y:
+                #these are false positives from walls
+                continue
 
-            # msg.header.frame_id="odom"
-            # direction=math.atan2(self.y0-pos_y, self.x0-pos_x)
-            # msg.pose.position.x = pos_x
-            # msg.pose.position.y = pos_y
-            # q_angle = quaternion_from_euler(0, 0, direction)
-            # msg.pose.orientation = Quaternion(*q_angle)
-            # self.enemy_pose_pub.publish(msg)
-        
+            cluster_centers.append([pos_x, pos_y])
 
         return cluster_centers
 
@@ -133,6 +129,9 @@ class FindEnemy(object):
             p.y=x[1]
             p.z=0
 
+            if abs(p.x)>1.5 or abs(p.y)>1.5:
+                continue
+
             self.markers.points.append(p)
         self.markers_pub.publish(self.markers)
 
@@ -146,9 +145,6 @@ class FindEnemy(object):
         marker_ns = 'markers'
         marker_id = 0
         marker_color = {'r': 0.7, 'g': 0.5, 'b': 1.0, 'a': 1.0}
-
-        # Define a marker publisher.
-        self.markers_pub = rospy.Publisher('/enemy_yolo', Marker, queue_size=5)
 
         # Initialize the marker points list.
         self.markers = Marker()
