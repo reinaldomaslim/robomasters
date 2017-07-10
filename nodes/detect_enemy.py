@@ -68,6 +68,7 @@ class FindEnemy(object):
         for i in range(len(msg.ranges)):
 
             if msg.ranges[i]<self.radius:
+
                 theta=math.atan2(math.sin(i*msg.angle_increment+self.yaw0), math.cos(i*msg.angle_increment+self.yaw0))#-math.pi/2
                 d=msg.ranges[i]
                 x=-d*math.sin(theta)+self.x_off+self.x0
@@ -106,9 +107,9 @@ class FindEnemy(object):
             pos_x=center[0][0]
             pos_y=center[0][1]
 
-            if pos_x<self.wall_x or pos_y<self.wall_y:
-                #these are false positives from walls
-                continue
+            # if pos_x<self.wall_x or pos_y<self.wall_y:
+            #     #these are false positives from walls
+            #     continue
 
             cluster_centers.append([pos_x, pos_y])
 
@@ -129,7 +130,7 @@ class FindEnemy(object):
             p.y=x[1]
             p.z=0
 
-            if abs(p.x)>1.5 or abs(p.y)>1.5:
+            if abs(p.x)>1.7 or abs(p.y)>1.5:
                 continue
 
             self.markers.points.append(p)

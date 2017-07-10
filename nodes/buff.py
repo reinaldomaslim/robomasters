@@ -1,17 +1,17 @@
 #!/usr/bin/env python
 
 ## PID control for yaw and pitch of turret towards target from target input from webcam
-## Subsribe to /roi topic to obtain position data
-## Publish angular velocity of turret to arduino through /vel_cmd topic
+## Subsribe to /yolo2_detections topic to obtain position data
+## Publish angular velocity of turret to arduino through /cmd_vel topic
 
 ## Small buff autoshooting 
 
 import rospy
 import numpy as np
+import matplotlib.pyplot as plt
 from time import time
 from sensor_msgs.msg import Joy
 from yolo2.msg import Detection, ImageDetections
-
 
 state_x = 0
 state_y = 0
@@ -23,21 +23,24 @@ def callback(msg):
     global updatetime
     updatetime = time()
 
+    frame = np.zeros((int(im_size[0]/10),int(im_size[1]/10)), dtype=np.uint8)
+
     for detection in msg.detections:
-	    #calculate center of roi
-	    center = [0, 0]
-	    center[0] = (detection.x - detection.width/2)*im_size[0]/10
-	    center[1] = (detection.y - detection.height/2)*im_size[1]/10
-	    print center
+        x1 = ( detection.x - detection.width/2 ) * im_size[0]/10
+        y1 = ( detection.y - detection.height/2) * im_size[1]/10
+        x2 = ( detection.x + detection.width/2 ) * im_size[0]/10
+        y2 = ( detection.y + detection.height/2) * im_size[1]/10
+        frame[int(y1):int(y2), int(x1):int(x2)] += detection.confidence
 
-	    if len(stash)==10:
-		    del stash[0]
-	    stash.append(center)
+    global stash
+    if len(stash)==5:
+        del stash[0]
+    stash.append(frame)
+    heatmap = np.sum(stash)
 
-	    heatmap = np.zeros((int(im_size[0]/10),int(im_size[1]/10)), dtype=np.uint8)
-	    for ctr in stash:
-		heatmap[ctr[0], ctr[1]] += 1
-    
+    plt.figure(figsize=(int(im_size[0]/10),int(im_size[1]/10)))
+    plt.imshow(heatmap, cmap='hot')
+
     global state_x, state_y
     state_x, state_y = np.unravel_index(heatmap.argmax(), heatmap.shape) #only first occurrence returned
 
@@ -48,7 +51,6 @@ def turret():
     rospy.Subscriber('/yolo2/detections', ImageDetections, callback)
     rate = rospy.Rate(10) # 10Hz
 
-    # PID parameters
     xMax = int(im_size[0]/10)
     yMax = int(im_size[1]/10)
     outMin = 524
@@ -67,7 +69,7 @@ def turret():
     errorp_y = 0
 
     while not rospy.is_shutdown():
-        if time() - updatetime < 3:
+        if time() - updatetime < 1:
             error_x = target_x - state_x
             output_x = Kp*error_x + Ki*(error_x+errorp_x) + Kd*(error_x-errorp_x)
             output_x = outNeutral - output_x
@@ -96,7 +98,7 @@ def turret():
             shoot = 0
             
         output = Joy()
-        output.buttons = [outNeutral, outNeutral, output_x, output_y, shoot]
+        output.buttons = [output_x, output_y, shoot]
 
         # rospy.loginfo("x_pos = %d", state_x)
         # rospy.loginfo("y_pos = %d", state_y)

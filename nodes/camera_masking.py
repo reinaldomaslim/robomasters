@@ -71,7 +71,8 @@ class CameraMasking(object):
         rad2px=width/fov #image width=1024, field of view=78 deg
         
         for i in range(len(self.clustered_enemy_pos)):
-            enemy_heading=math.atan2(self.clustered_enemy_pos[i][1]-self.y0-self.cam_x_offset*math.sin(self.yaw0), self.clustered_enemy_pos[i][0]-self.x0-self.cam_x_offset*math.cos(self.yaw0))
+            enemy_heading=math.atan2(self.clustered_enemy_pos[i][1]-self.y0-self.cam_x_offset*math.sin(self.yaw0), self.clustered_enemy_pos[i][0]-self.x0-self.cam_x_offset*math.cos(self.yaw0))-self.yaw0
+            enemy_heading=math.atan2(math.sin(enemy_heading), math.cos(enemy_heading))
             enemy_mid=int((fov/2-enemy_heading)*rad2px) #position of enemy in pixels
             #print(enemy_mid)   
             if enemy_mid>width+100 or enemy_mid<-100:
