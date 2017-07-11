@@ -10,8 +10,8 @@
 #include <sensor_msgs/Joy.h>
 #include "DJI_DBUS.h"
 
-//there are two versionsof DJI controller protocol
-// one is the latestest firmware with 25 bits with 7 channel
+//there are two versions of DJI controller protocol
+//one is the latestest firmware with 25 bits with 7 channel
 //another is the old one with 6 channel of 18 bits
 //please use America coding methods
 /*
@@ -57,7 +57,7 @@ uint8_t i;
 //ros
 ros::NodeHandle nh;
 void joy_cb( const sensor_msgs::Joy& joy);
-ros::Subscriber<sensor_msgs::Joy> sub_joy("/vel_cmd", joy_cb);
+ros::Subscriber<sensor_msgs::Joy> sub_joy("/cmd_vel", joy_cb);
 
 
 void setup(){
@@ -151,34 +151,31 @@ int shooting(int cmd){
 
 void joy_cb( const sensor_msgs::Joy& joy){
   updatetime = millis();
-  //left button up means auto
-  //sequence : left  right_UD  right_LR
-    ROS_Output[LEFT_LR] = (uint16_t)(joy.buttons[2]);
-    ROS_Output[LEFT_UD] = (uint16_t)(joy.buttons[3]);
-    ROS_Output[RIGHT_LR] = (uint16_t)(joy.buttons[0]);
-    ROS_Output[RIGHT_UD] = (uint16_t)(joy.buttons[1]);
-    if (DBus_Output[CHANNEL_R] == CHANNEL_UP) ROS_Output[CHANNEL_L] = shooting(joy.buttons[4]);
+  //right button up means auto
+  //sequence : left_LR left_UD shoot
+    ROS_Output[LEFT_LR] = (uint16_t)(joy.buttons[0]);
+    ROS_Output[LEFT_UD] = (uint16_t)(joy.buttons[1]);
+    if (DBus_Output[CHANNEL_R] == CHANNEL_UP) ROS_Output[CHANNEL_L] = shooting(joy.buttons[2]);
     else ROS_Output[CHANNEL_L] = CHANNEL_MID;
 }
 void write18BitsDbusData(){
   //05 04 20 00 01 D8 00 00 00 00 00 00 00 00 00 00 00 00 original 
   //00 04 20 00 01 58 00 00 00 00 00 00 00 00 00 00 00 00 adjusted    
   
+  DBus_Final_Output[RIGHT_UD] = DBus_Output[RIGHT_UD];
+  DBus_Final_Output[RIGHT_LR] = DBus_Output[RIGHT_LR];
   if(DBus_Output[CHANNEL_R] == CHANNEL_UP && currTime - updatetime < 500){
     //auto mode
     DBus_Final_Output[LEFT_UD] = ROS_Output[LEFT_UD];
     DBus_Final_Output[LEFT_LR] = ROS_Output[LEFT_LR];
-    DBus_Final_Output[RIGHT_UD] = ROS_Output[RIGHT_UD];
-    DBus_Final_Output[RIGHT_LR] = ROS_Output[RIGHT_LR];
     DBus_Final_Output[CHANNEL_L] = ROS_Output[CHANNEL_L];
+    DBus_Final_Output[CHANNEL_R] = CHANNEL_UP;
     
   }else{
-    if (DBus_Output[CHANNEL_R] == CHANNEL_DOWN) DBus_Final_Output[CHANNEL_R] = CHANNEL_DOWN;
+    if (DBus_Output[CHANNEL_R] == CHANNEL_DOWN && shoot==0) DBus_Final_Output[CHANNEL_R] = CHANNEL_DOWN;
     else DBus_Final_Output[CHANNEL_R] = CHANNEL_UP;
     DBus_Final_Output[LEFT_UD] = DBus_Output[LEFT_UD];
     DBus_Final_Output[LEFT_LR] = DBus_Output[LEFT_LR];
-    DBus_Final_Output[RIGHT_UD] = DBus_Output[RIGHT_UD];
-    DBus_Final_Output[RIGHT_LR] = DBus_Output[RIGHT_LR];
     if (shoot==0 && (currTime - lastChange) > chgTime) DBus_Final_Output[CHANNEL_L] = DBus_Output[CHANNEL_L];
     else DBus_Final_Output[CHANNEL_L] = shooting(0);
   }
@@ -192,7 +189,7 @@ void write18BitsDbusData(){
   if(currTime - dBus.updatetime > 500){  
     DBus_Output[CHANNEL_L] = CHANNEL_MID;
     DBus_Final_Output[CHANNEL_L] = shooting(0);
-    if (shoot==0) DBus_Final_Output[CHANNEL_R] = CHANNEL_MID;
+    if (shoot==0) DBus_Final_Output[CHANNEL_R] = CHANNEL_DOWN;
     else DBus_Final_Output[CHANNEL_R] = CHANNEL_UP;
     DBus_Final_Output[LEFT_LR] = 1024;
     DBus_Final_Output[RIGHT_UD] = 1024;

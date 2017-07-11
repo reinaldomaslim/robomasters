@@ -28,6 +28,7 @@ static unsigned int lastChange = millis();
 const unsigned int chgTime = 100;
 int shooting(int);
 uint32_t updatetime = 0;
+int osc_count = 0, osc_turn = 0;
 
 //channel define
 #define LEFT_UD 3
@@ -151,8 +152,8 @@ void read_joy_cmd( ){
 	      break;
       case 4:
       	updatetime = millis();
-        ROS_Output[RIGHT_LR] = joy_cmd.joyData[0];
-        ROS_Output[RIGHT_UD] = joy_cmd.joyData[1];
+        ROS_Output[RIGHT_UD] = joy_cmd.joyData[0];
+        ROS_Output[RIGHT_LR] = joy_cmd.joyData[1];
         ROS_Output[LEFT_LR] = joy_cmd.joyData[2];
         ROS_Output[LEFT_UD] = joy_cmd.joyData[3];
         if(DBus_Output[CHANNEL_L] != CHANNEL_UP) ROS_Output[CHANNEL_L] = CHANNEL_MID;
@@ -254,7 +255,19 @@ void write18BitsDbusData(){
     DBus_Final_Output[RIGHT_LR] = 1024;
     DBus_Final_Output[LEFT_UD] = 1024;
   }
-  
+
+  //send signal to remove oscillations
+  if (DBus_Final_Output[LEFT_LR] == 1024 && DBus_Final_Output[LEFT_UD] == 1024 && DBus_Final_Output[RIGHT_LR] == 1024 && DBus_Final_Output[RIGHT_UD] == 1024) osc_count++;
+  else osc_count = 0;
+  if (osc_count > 2000) {
+    osc_count = 0;
+    if (osc_turn==0) { DBus_Final_Output[LEFT_LR] = 1030; osc_turn = 1; }
+    else if (osc_turn==1) { DBus_Final_Output[LEFT_LR] = 1020; osc_turn = 0; }
+  }
+
+  //prevent kill cos can't pitch up after
+  if (DBus_Final_Output[CHANNEL_R] == CHANNEL_DOWN) DBus_Final_Output[CHANNEL_R] = CHANNEL_MID;
+    
   if(DBus_Final_Output[RIGHT_LR]>1524)
     DBus_Final_Output[RIGHT_LR]=1524;
   if(DBus_Final_Output[LEFT_LR]>1524)
@@ -349,6 +362,5 @@ void printDBUSStatus()
   } else if (dBus.Failsafe() == DBUS_SIGNAL_OK) {
     Serial.print("OK");
   }
-  Serial.println(".");
   
 }
