@@ -58,7 +58,7 @@ void readLocalizationSystem(void);
 void publish_localization(void);
 sensor_msgs::Joy joy_msg;
 geometry_msgs::Twist localization_msg;
-ros::Subscriber<sensor_msgs::Joy> sub_joy("/vel_cmd", joy_cb);
+ros::Subscriber<sensor_msgs::Joy> sub_joy("/cmd_vel", joy_cb);
 ros::Publisher pub_joy( "/joy_msg", &joy_msg);
 ros::Publisher pub_localization( "/localization", &localization_msg);
 char frameid[] = "/joy_msg";
@@ -101,6 +101,7 @@ void loop(){
       publish_data();
       nh.spinOnce();
       //printDBUSStatus();
+      //upload_data_display();
   }
 
   
@@ -131,7 +132,6 @@ void joy_cb( const sensor_msgs::Joy& joy){
 void publish_data(void){
   publish_joy();
   publish_localization();
-  printDBUSStatus();
 }
 
 void publish_localization(void){
@@ -150,6 +150,7 @@ float zangle=0;
 float xangle=0;
 float yangle=0;
 float w_z=0;
+
 void readLocalizationSystem(void){
   static union
   {
@@ -294,6 +295,18 @@ void read_data(void){
          break;    
      } 
    }
+}
+
+void upload_data_display()
+{
+  Serial.print("x ");
+  Serial.print(ROS_Localization_Upload[0]);
+  Serial.print("\ty ");
+  Serial.print(ROS_Localization_Upload[1]);
+  Serial.print("\tw ");
+  Serial.print(ROS_Localization_Upload[5]);
+  Serial.println(".");
+  
 }
 
 void printDBUSStatus()
