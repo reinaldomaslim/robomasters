@@ -470,10 +470,10 @@ class MissionPlanner(object):
                 #if target is inside arena
                 if self.path < 4:
                     # self.translate(ref_x, ref_y, self.yaw0 + self.path*20*math.pi/180)
-                    self.translate(ref_x, ref_y, self.yaw0 + self.path*10*math.pi/180)
+                    self.translate(ref_x, ref_y, self.yaw0 + self.path*20*math.pi/180)
                 else:
                     # self.translate(ref_x, ref_y, self.yaw0 - self.path*20*math.pi/180)
-                    self.translate(ref_x, ref_y, self.yaw0 - self.path*10*math.pi/180)
+                    self.translate(ref_x, ref_y, self.yaw0 - self.path*20*math.pi/180)
 
     def inside_arena(self, pos):
         #check whether pos is inside arena, assuming origin 0,0 in middle
