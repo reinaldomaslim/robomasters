@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 """ 
-reinaldo and yan paing oo 
-active and passive dodging for Robomasters base 
+NTU MECATRON Base Robot for Robomasters 2017
+Reinaldo, Yan Pai, Tuan Anh, Emily, Asur 
 """
 import rospy
 import actionlib
@@ -462,7 +462,7 @@ class MissionPlanner(object):
         #print("Time    : ",self.t)
         #print("Counter : ",self.counter)
 
-        if abs(self.x0) > 0.5 or abs(self.y0) > 0.5:
+        if math.sqrt(self.x0**2+self.y0**2) > 0.5:
             print("return")
             self.translate(0, 0, self.yaw0)
         else:
