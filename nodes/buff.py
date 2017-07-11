@@ -53,9 +53,11 @@ def callback(msg):
     state_x, state_y = np.unravel_index(heatmap.argmax(), heatmap.shape) #only first occurrence returned
 
 def turret():
-    global state_x, state_y, updatetime
-    pub = rospy.Publisher('/vel_cmd', Joy, queue_size=10)
+
     rospy.init_node('small_buff', anonymous=True)
+    
+    global state_x, state_y, updatetime
+    pub = rospy.Publisher('/cmd_vel', Joy, queue_size=10)
     rospy.Subscriber('/yolo2/detections', ImageDetections, callback)
     rate = rospy.Rate(10) # 10Hz
 
