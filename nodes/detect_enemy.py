@@ -71,8 +71,8 @@ class FindEnemy(object):
 
                 theta=math.atan2(math.sin(i*msg.angle_increment+self.yaw0), math.cos(i*msg.angle_increment+self.yaw0))#-math.pi/2
                 d=msg.ranges[i]
-                x=-d*math.sin(theta)+self.x_off+self.x0
-                y=d*math.cos(theta)+self.y0
+                x=-d*math.sin(theta)+self.x0+self.x_off*math.cos(self.yaw0)
+                y=d*math.cos(theta)+self.y0+self.x_off*math.sin(self.yaw0)
                 #print(x, y)
                 self.grid.append([x, y])
                 

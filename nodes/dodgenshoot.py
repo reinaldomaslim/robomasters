@@ -12,7 +12,7 @@ import cv2
 
 from actionlib_msgs.msg import *
 from geometry_msgs.msg import Pose, Point, Quaternion, Twist, PoseStamped, Vector3
-from sensor_msgs.msg import RegionOfInterest, CameraInfo, LaserScan, Joy
+from sensor_msgs.msg import RegionOfInterest, CameraInfo, LaserScan, Joy, Image
 from nav_msgs.msg import Odometry
 from tf.transformations import quaternion_from_euler, euler_from_quaternion
 from visualization_msgs.msg import Marker
@@ -24,6 +24,9 @@ from collections import Counter
 from time import time
 
 class MissionPlanner(object):
+
+
+
     x0, y0, yaw0= 0, 0, 0
     enemy_pos=[]
 
@@ -38,9 +41,9 @@ class MissionPlanner(object):
     i_x = 0.1 #0.2
     d_x = 100.0 #200, 300
 
-    p_y = 550.0 #600
+    p_y = 850.0 #600
     i_y = 0.1 #0.1
-    d_y = 100.0 #120, 180
+    d_y = 120.0 #120, 180
 
 
     x_lin_vel_thres = 660.0 # max 660
@@ -72,18 +75,41 @@ class MissionPlanner(object):
     isleft=True
 
     #turret control params
-    updatetime = time()
+    state_x = 0.0
+    state_y = 0.0
+    statep_x = state_x
+    statep_y = state_y
     stash = []
-    #xMax = rospy.get_param('/usb_cam/image_width') / 10
-    #yMax = rospy.get_param('/usb_cam/image_height') / 10
+    prevsh = 0
+    updatetime = time()
 
-    # needs tuning again
-    Kp = 1.6
-    Ki = 0.001
-    Kd = 0.8
+    #camera parameters
+    # xMax = rospy.get_param('/usb_cam/image_width') / 10.0
+    # yMax = rospy.get_param('/usb_cam/image_height') / 10.0
+    xMax = 1024.0/10.0
+    yMax = 576.0/10.0
+    error_x = xMax/2.0
 
-    #target_x = xMax/2
-    #target_y = yMax/2
+    #heatmap to publish
+    img = Image()
+    img.header.frame_id = '/heatmap'
+    img.height = int(xMax)
+    img.width = int(yMax)
+    img.encoding = 'mono8'
+    img.step = int(yMax)
+
+
+    Kp_x = 1.3
+    Ki_x = 0
+    Kd_x = 1.5
+
+    Kp_y = 1.5
+    Ki_y = 0
+    Kd_y = 0.8
+
+    target_x = xMax/2.0
+    target_y = yMax/2.0
+    
     errorp_x = 0
     errorp_y = 0
 
@@ -95,20 +121,70 @@ class MissionPlanner(object):
     cmd_pitch=bias
     cmd_shoot=0
 
+    startshoottime=0
+
+    # path_marker params
+    path_marker=[]
+    path_marker_done=[]
+
+    # ref_marker
+    ref_marker = Marker()
+
+
     def __init__(self, nodename):
         rospy.init_node(nodename, anonymous=False)
         print self.d_ang
         rospy.Subscriber("/odometry", Odometry, self.odom_callback, queue_size = 50)
-        #rospy.Subscriber("/enemy_yolo", Marker, self.enemy_callback, queue_size = 50)
-        #rospy.Subscriber('/roi', RegionOfInterest, self.armor_callback, queue_size = 50)
+        rospy.Subscriber("/enemy_yolo", Marker, self.enemy_callback, queue_size = 50)
+        rospy.Subscriber('/roi', RegionOfInterest, self.armor_callback, queue_size = 50)
         self.cmd_vel_pub=rospy.Publisher("/cmd_vel", Joy, queue_size=10)
+        self.pubimg = rospy.Publisher('/heatmap', Image, queue_size=1)
+        self.pubpath_marker = rospy.Publisher('path_marker', Marker, queue_size=5)
+        self.pubref_marker = rospy.Publisher('ref_marker', Marker, queue_size=5)
+
+
+
+        # path_marker
+        for i in range(6):
+            self.path_marker_done.append(False)
+            self.path_marker.append(Marker())
+            self.path_marker[i].header.stamp = rospy.get_rostime();
+            self.path_marker[i].header.frame_id = "odom";
+            self.path_marker[i].ns = "points";
+            self.path_marker[i].type = self.path_marker[i].POINTS
+            self.path_marker[i].action = self.path_marker[i].ADD
+            self.path_marker[i].pose.orientation.w = 1.0
+            self.path_marker[i].id = 0
+            self.path_marker[i].scale.x = 0.02
+            self.path_marker[i].scale.y = 0.02
+            self.path_marker[i].scale.z = 0.02
+            self.path_marker[i].color.g = 1.0
+            self.path_marker[i].color.b = 1.0
+            self.path_marker[i].color.a = 1.0
+
+        #  ref_marker
+            self.ref_marker.header.stamp = rospy.get_rostime();
+            self.ref_marker.header.frame_id = "odom";
+            self.ref_marker.ns = "points";
+            self.ref_marker.type = self.ref_marker.POINTS
+            self.ref_marker.action = self.ref_marker.ADD
+            self.ref_marker.pose.orientation.w = 1.0
+            self.ref_marker.id = 0
+            self.ref_marker.scale.x = 0.02
+            self.ref_marker.scale.y = 0.02
+            self.ref_marker.scale.z = 0.02
+            self.ref_marker.color.r = 1.0
+            self.ref_marker.color.a = 1.0
+
+        self.pitch_up()
 
         rate=rospy.Rate(10)
         msg=Joy()
 
+
         heading_threshold=20*math.pi/180
         while not rospy.is_shutdown():
-            self.translate(0, 0, 0)
+            #self.translate(0, 0, 0)
             #self.passive_dodge()
 
             # if abs(self.yaw0-0)>heading_threshold:
@@ -116,35 +192,59 @@ class MissionPlanner(object):
             # else:
             #     #else translate to goal    
             #     self.translate(0, 0, 0)
-            # if len(self.enemy_pos)==1:
-            #     #if only one, active dodging 
-            #     self.active_dodge()      
-            # else:
-            #     #more than one, passive dodge
-            #     continue
+            if len(self.enemy_pos)==1:
+                 #if only one, active dodging 
+                # self.active_dodge()    
+                self.passive_dodge()      
+            else:
+
+                #more than one, passive dodge
+                self.passive_dodge()
             
             # msg=Joy()
             
-            # #do priority that governs yawing (lidar or vision)
-            # if time() - self.updatetime < 3:
-            #     #update time is only updated in shooting mode. armor detected
-            #     msg.buttons=[self.cmd_x, self.cmd_y, self.cmd_yaw_turret, self.cmd_pitch, self.cmd_shoot]
+            #do priority that governs yawing (lidar or vision)
+            if time() - self.updatetime < 1 and ((self.state_x - self.statep_x < self.xMax/5 and self.state_y - self.statep_y < self.yMax/2) or not self.stash) and abs(self.error_x)<self.xMax/4:
+                # print("shoot")
+                #update time is only updated in shooting mode. armor detected
+                if self.cmd_shoot==1 and time() - self.startshoottime < 3:
+                    self.cmd_x = self.bias
+                    self.cmd_y = self.bias
 
-            # else:
-            #     #no shooting, dodge and reset turret pid
-            #     self.state_x=0
-            #     self.state_y=0
-            #     self.cmd_shoot=0
-            #     self.cmd_pitch=self.bias
-            #     msg.buttons=[self.cmd_x, self.cmd_y, self.cmd_yaw, self.cmd_pitch, self.cmd_shoot]
-            msg.buttons=[int(self.cmd_x), int(self.cmd_y), int(self.cmd_yaw), int(self.cmd_pitch), int(self.cmd_shoot)]
-            #msg.buttons=[int(self.cmd_x), 1024, int(self.cmd_yaw), int(self.cmd_pitch), int(self.cmd_shoot)]
-            print(msg)
+                # if time()-self.startshoottime>3 and time()-self.startshoottime <4:
+                #     self.cmd_pitch=1524 #pitch up
+
+                msg.buttons=[int(self.cmd_x), int(self.cmd_y), int(self.cmd_yaw_turret), int(self.cmd_pitch), int(self.cmd_shoot)]
+
+            else:
+                
+                #no shooting, dodge and reset turret pid
+                if time() - self.updatetime > 2:
+                    self.stash = []
+
+                heatmap = np.zeros((int(self.xMax),int(self.yMax)), dtype=np.uint8)
+                self.img.data=np.resize(heatmap, int(self.xMax)*int(self.yMax)).astype(np.uint8).tolist()
+                self.pubimg.publish(self.img)
+                self.state_x=0
+                self.state_y=0
+                self.cmd_shoot=0
+                self.cmd_pitch=self.bias
+                msg.buttons=[int(self.cmd_x), int(self.cmd_y), int(self.cmd_yaw), int(self.cmd_pitch), int(self.cmd_shoot)]
+            #msg.buttons=[int(self.cmd_x), int(self.cmd_y), int(self.cmd_yaw), int(self.cmd_pitch), int(self.cmd_shoot)]
+            #print(msg)
             self.cmd_vel_pub.publish(msg)
 
             rate.sleep()
 
         self.stop()
+    def generate_path(self):
+        pass
+
+    def pitch_up(self):
+        msg=Joy()
+        #pitch up to ensure armor in field of view
+        self.cmd_pitch=1524
+        msg.buttons=[self.bias, self.bias, self.bias, int(self.cmd_pitch), 0]
 
 
     def stop(self):
@@ -158,7 +258,7 @@ class MissionPlanner(object):
 
         #rotate to face target
         heading=math.atan2(target[1]-self.y0, target[0]-self.x0)
-        heading_threshold=25*math.pi/180
+        heading_threshold=40*math.pi/180
 
         difference=abs(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading)))
 
@@ -171,7 +271,7 @@ class MissionPlanner(object):
             
             #print("translate")
             #the higher d, the faster 
-            d=0.4
+            d=0.3
             
             #direction to the left
             beta1=heading+math.pi/2
@@ -183,8 +283,8 @@ class MissionPlanner(object):
                 #add to origin vector
                 delta=math.atan2(-self.y0, -self.x0)
                 #print(delta*180/math.pi)
-                pred1=[self.x0+d*math.cos(beta1)+0.1*math.cos(delta), self.y0+d*math.sin(beta1)+0.1*math.sin(delta)]
-                pred2=[self.x0+d*math.cos(beta2)+0.1*math.cos(delta), self.y0+d*math.sin(beta2)+0.1*math.sin(delta)]
+                pred1=[self.x0+d*math.cos(beta1)+0.2*math.cos(delta), self.y0+d*math.sin(beta1)+0.2*math.sin(delta)]
+                pred2=[self.x0+d*math.cos(beta2)+0.2*math.cos(delta), self.y0+d*math.sin(beta2)+0.2*math.sin(delta)]
             else:
                 #predict position a timestep ahead
                 pred1=[self.x0+d*math.cos(beta1), self.y0+d*math.sin(beta1)]
@@ -227,33 +327,126 @@ class MissionPlanner(object):
     def passive_dodge(self):
 
         if self.path == 1:
-            ref_x = self.x_plot(self.t,0,0.5,0.25)
-            ref_y = self.y_plot(self.t,0,0.5,0.25)
+            # ref_x = self.x_plot(self.t,0,0.5,0.25)
+            # ref_y = self.y_plot(self.t,0,0.5,0.25)
+            ref_x = self.x_plot(self.t,0,0.4,0.25)
+            ref_y = self.y_plot(self.t,0,0.4,0.25)
+            if self.path_marker_done[self.path-1] == False:
+                points = []
+                for i in range(0,1000):
+                    p = Point()
+                    # p.x = self.x_plot(i,0,0.5,0.25)
+                    # p.y = self.y_plot(i,0,0.5,0.25)
+                    p.x = self.x_plot(i,0,0.4,0.25)
+                    p.y = self.y_plot(i,0,0.4,0.25)
+                    p.z = 0.0
+                    points.append(p)
+                self.path_marker[self.path-1].points = points
+                self.path_marker_done[self.path-1] = True
 
 
         elif self.path == 2:
-            ref_x = self.x_plot(self.t,-26,-0.45,-0.5)
-            ref_y = self.y_plot(self.t,26,0.45,0.5)
+            # ref_x = self.x_plot(self.t,-26,-0.45,-0.4)
+            # ref_y = self.y_plot(self.t,26,0.45,0.4)
+            ref_x = self.x_plot(self.t,-26,-0.4,-0.4)
+            ref_y = self.y_plot(self.t,26,0.4,0.4)
+            if self.path_marker_done[self.path-1] == False:
+                points = []
+                for i in range(0,1000):
+                    p = Point()
+                    # p.x = self.x_plot(i,-26,-0.45,-0.4)
+                    # p.y = self.y_plot(i,26,0.45,0.4)
+                    p.x = self.x_plot(i,-26,-0.4,-0.4)
+                    p.y = self.y_plot(i,26,0.4,0.4)
+                    p.z = 0.0
+                    points.append(p)
+                self.path_marker[self.path-1].points = points
+                self.path_marker_done[self.path-1] = True
 
 
         elif self.path == 3:
-            ref_x = self.x_plot(self.t,-26,0.45,0.5)
-            ref_y = self.y_plot(self.t,-26,0.45,0.5)
+            # ref_x = self.x_plot(self.t,-26,0.45,0.4)
+            # ref_y = self.y_plot(self.t,-26,0.45,0.4)
+            ref_x = self.x_plot(self.t,-26,0.4,0.4)
+            ref_y = self.y_plot(self.t,-26,0.4,0.4)
+            if self.path_marker_done[self.path-1] == False:
+                points = []
+                for i in range(0,1000):
+                    p = Point()
+                    # p.x = self.x_plot(i,-26,0.45,0.4)
+                    # p.y = self.y_plot(i,-26,0.45,0.4)
+                    p.x = self.x_plot(i,-26,0.4,0.4)
+                    p.y = self.y_plot(i,-26,0.4,0.4)
+                    p.z = 0.0
+                    points.append(p)
+                self.path_marker[self.path-1].points = points
+                self.path_marker_done[self.path-1] = True
+
 
 
         elif self.path == 4:
-            ref_x = self.x_plot(self.t,0,-0.5,-0.25)
-            ref_y = self.y_plot(self.t,0,0.5,0.25)
+            # ref_x = self.x_plot(self.t,0,-0.5,-0.25)
+            # ref_y = self.y_plot(self.t,0,0.5,0.25)
+            ref_x = self.x_plot(self.t,0,-0.4,-0.25)
+            ref_y = self.y_plot(self.t,0,0.4,0.25)
+            if self.path_marker_done[self.path-1] == False:
+                points = []
+                for i in range(0,1000):
+                    p = Point()
+                    # p.x = self.x_plot(i,0,-0.5,-0.25)
+                    # p.y = self.y_plot(i,0,0.5,0.25)
+                    p.x = self.x_plot(i,0,-0.4,-0.25)
+                    p.y = self.y_plot(i,0,0.4,0.25)
+                    p.z = 0.0
+                    points.append(p)
+                self.path_marker[self.path-1].points = points
+                self.path_marker_done[self.path-1] = True
 
 
         elif self.path == 5:
-            ref_x = self.x_plot(self.t,26,0.45,0.5)
-            ref_y = self.y_plot(self.t,26,0.45,0.5)
+            # ref_x = self.x_plot(self.t,26,0.45,0.4)
+            # ref_y = self.y_plot(self.t,26,0.45,0.4)
+            ref_x = self.x_plot(self.t,26,0.4,0.4)
+            ref_y = self.y_plot(self.t,26,0.4,0.4)
+            if self.path_marker_done[self.path-1] == False:
+                points = []
+                for i in range(0,1000):
+                    p = Point()
+                    # p.x = self.x_plot(i,26,0.45,0.4)
+                    # p.y = self.y_plot(i,26,0.45,0.4)
+                    p.x = self.x_plot(i,26,0.4,0.4)
+                    p.y = self.y_plot(i,26,0.4,0.4)
+                    p.z = 0.0
+                    points.append(p)
+                self.path_marker[self.path-1].points = points
+                self.path_marker_done[self.path-1] = True
 
 
         elif self.path == 6:
-            ref_x = self.x_plot(self.t,26,-0.45,-0.5)
-            ref_y = self.y_plot(self.t,-26,0.45,0.5)
+            # ref_x = self.x_plot(self.t,26,-0.45,-0.4)
+            # ref_y = self.y_plot(self.t,-26,0.45,0.4)
+            ref_x = self.x_plot(self.t,26,-0.4,-0.4)
+            ref_y = self.y_plot(self.t,-26,0.4,0.4)
+            if self.path_marker_done[self.path-1] == False:
+                points = []
+                for i in range(0,1000):
+                    p = Point()
+                    # p.x = self.x_plot(i,26,-0.45,-0.4)
+                    # p.y = self.y_plot(i,-26,0.45,0.4)
+                    p.x = self.x_plot(i,26,-0.4,-0.4)
+                    p.y = self.y_plot(i,-26,0.4,0.4)
+                    p.z = 0.0
+                    points.append(p)
+                self.path_marker[self.path-1].points = points
+                self.path_marker_done[self.path-1] = True
+
+        self.pubpath_marker.publish(self.path_marker[self.path-1])
+        points = Point()
+        points.x = ref_x
+        points.y = ref_y
+        self.ref_marker.points = [points]
+        self.pubref_marker.publish(self.ref_marker)
+
 
  
         if self.t > self.counter*35:
@@ -269,16 +462,18 @@ class MissionPlanner(object):
         #print("Time    : ",self.t)
         #print("Counter : ",self.counter)
 
-        if self.x0 > 0.5 or self.y0> 0.5:
+        if abs(self.x0) > 0.5 or abs(self.y0) > 0.5:
             print("return")
-            self.translate(0, 0, 0)
+            self.translate(0, 0, self.yaw0)
         else:
             if self.inside_arena([ref_x, ref_y])==True:
                 #if target is inside arena
                 if self.path < 4:
-                    self.translate(ref_x, ref_y, self.yaw0 + 3*self.path)
+                    # self.translate(ref_x, ref_y, self.yaw0 + self.path*20*math.pi/180)
+                    self.translate(ref_x, ref_y, self.yaw0 + self.path*10*math.pi/180)
                 else:
-                    self.translate(ref_x, ref_y, self.yaw0 - 3*self.path)
+                    # self.translate(ref_x, ref_y, self.yaw0 - self.path*20*math.pi/180)
+                    self.translate(ref_x, ref_y, self.yaw0 - self.path*10*math.pi/180)
 
     def inside_arena(self, pos):
         #check whether pos is inside arena, assuming origin 0,0 in middle
@@ -388,35 +583,46 @@ class MissionPlanner(object):
 
     def armor_callback(self, msg):
 
-        center = [0, 0]
-        center[0] = (msg.x_offset + msg.width/2) / 10
-        center[1] = (msg.y_offset + msg.height/2) / 10
+        #calculate center and size of roi
+        roi = [0.0, 0.0, 0.0] #center_x, center_y, size
+        roi[0] = (msg.x_offset + msg.width/2) / 10.0
+        roi[1] = (msg.y_offset + msg.height/2) / 10.0
+        roi[2] = msg.width * msg.height / 10.0
 
-        if len(self.stash)==10:
+        if len(self.stash)==5:
             del self.stash[0]
-        self.stash.append(center)
-
-        heatmap = np.zeros((self.xMax,self.yMax), dtype=np.uint8)
-        for ctr in self.stash:
-            heatmap[ctr[0], ctr[1]] += 1
+        self.stash.append(roi)
         
-        state_x, state_y = np.unravel_index(heatmap.argmax(), heatmap.shape)
+        heatmap = np.zeros((int(self.xMax),int(self.yMax)), dtype=np.uint8)
+        for obj in self.stash:
+            heatmap[int(obj[0]), int(obj[1])] += 0.1*obj[2]
 
-        error_x = self.target_x - state_x
-        output_x = self.Kp*error_x + self.Ki*(error_x+self.errorp_x) + self.Kd*(error_x-self.errorp_x)
+        self.img.data=np.resize(heatmap, int(self.xMax)*int(self.yMax)).astype(np.uint8).tolist()
+        self.pubimg.publish(self.img)
+        
+        self.statep_x = self.state_x
+        self.statep_y = self.state_y
+        self.state_x, self.state_y = np.unravel_index(heatmap.argmax(), heatmap.shape)
+
+        self.error_x = self.target_x - self.state_x
+        output_x = self.Kp_x*self.error_x + self.Ki_x*(self.error_x+self.errorp_x) + self.Kd_x*(self.error_x-self.errorp_x)
         self.cmd_yaw_turret = self.bias - output_x
     
-        error_y = state_y - self.target_y
-        output_y = self.Kp*error_y + self.Ki*(error_y+self.errorp_y) + self.Kd*(error_y-self.errorp_y)
+        error_y = self.state_y - self.target_y
+        output_y = self.Kp_y*error_y + self.Ki_y*(error_y+self.errorp_y) + self.Kd_y*(error_y-self.errorp_y)
         self.cmd_pitch = self.bias - output_y
     
-        self.errorp_x = error_x
+        self.errorp_x = self.error_x
         self.errorp_y = error_y
 
-        if abs(error_x) < xMax/10 and abs(error_y) < yMax/6:
+        if abs(self.error_x) < self.xMax/10 and abs(error_y) < self.yMax/6:
             self.cmd_shoot = 1
+            if self.prevsh == 0:
+                self.startshoottime = time()
+            self.prevsh = 1
         else:
             self.cmd_shoot = 0
+            self.prevsh = 0
 
         self.updatetime=time()
 

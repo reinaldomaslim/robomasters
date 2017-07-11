@@ -19,6 +19,14 @@ stash = []
 updatetime = time()
 im_size=[640, 480]
 
+#heatmap to publish
+img = Image()
+img.header.frame_id = '/heatmap'
+img.height = int(yMax)
+img.width = int(xMax)
+img.encoding = 'MONO8'
+img.step = int(xMax)
+
 def callback(msg):
     global updatetime
     updatetime = time()
@@ -38,8 +46,8 @@ def callback(msg):
     stash.append(frame)
     heatmap = np.sum(stash)
 
-    plt.figure(figsize=(int(im_size[0]/10),int(im_size[1]/10)))
-    plt.imshow(heatmap, cmap='hot')
+    img.data=np.resize(heatmap, int(im_size[0]/10)*int(im_size[1]/10)).astype(np.uint8).tolist()
+    pubimg.publish(img)
 
     global state_x, state_y
     state_x, state_y = np.unravel_index(heatmap.argmax(), heatmap.shape) #only first occurrence returned
