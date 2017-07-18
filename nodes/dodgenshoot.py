@@ -33,7 +33,7 @@ class MissionPlanner(object):
     ## Movement PID constants
     del_T = 100.0   # time step in ms
     
-    p_ang = 140.0 #140, 140
+    p_ang =140.0 #140, 140
     i_ang = 0.02 #0.013, 0.01
     d_ang = 55000.0 #50000, 56000
 
@@ -126,7 +126,6 @@ class MissionPlanner(object):
     # path_marker params
     path_marker=[]
     path_marker_done=[]
-    points=[]
 
     # ref_marker
     ref_marker = Marker()
@@ -134,11 +133,10 @@ class MissionPlanner(object):
 
     def __init__(self, nodename):
         rospy.init_node(nodename, anonymous=False)
-        
+        print self.d_ang
         rospy.Subscriber("/odometry", Odometry, self.odom_callback, queue_size = 50)
         rospy.Subscriber("/enemy_yolo", Marker, self.enemy_callback, queue_size = 50)
         rospy.Subscriber('/roi', RegionOfInterest, self.armor_callback, queue_size = 50)
-
         self.cmd_vel_pub=rospy.Publisher("/cmd_vel", Joy, queue_size=10)
         self.pubimg = rospy.Publisher('/heatmap', Image, queue_size=1)
         self.pubpath_marker = rospy.Publisher('path_marker', Marker, queue_size=5)
@@ -197,7 +195,7 @@ class MissionPlanner(object):
             if len(self.enemy_pos)==1:
                  #if only one, active dodging 
                 # self.active_dodge()    
-                self.passive_dodge()      
+                self.active_dodge()      
             else:
 
                 #more than one, passive dodge
@@ -267,7 +265,7 @@ class MissionPlanner(object):
         if difference>heading_threshold:
 
             #print("rotate")
-            #print(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading))*180/math.pi)
+            print(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading))*180/math.pi)
             self.rotate(heading)
         else:
             
@@ -334,7 +332,7 @@ class MissionPlanner(object):
             ref_x = self.x_plot(self.t,0,0.4,0.25)
             ref_y = self.y_plot(self.t,0,0.4,0.25)
             if self.path_marker_done[self.path-1] == False:
-                
+                points = []
                 for i in range(0,1000):
                     p = Point()
                     # p.x = self.x_plot(i,0,0.5,0.25)
@@ -342,8 +340,8 @@ class MissionPlanner(object):
                     p.x = self.x_plot(i,0,0.4,0.25)
                     p.y = self.y_plot(i,0,0.4,0.25)
                     p.z = 0.0
-                    self.points.append(p)
-                self.path_marker.points = self.points
+                    points.append(p)
+                self.path_marker[self.path-1].points = points
                 self.path_marker_done[self.path-1] = True
 
 
@@ -353,35 +351,35 @@ class MissionPlanner(object):
             ref_x = self.x_plot(self.t,-26,-0.4,-0.4)
             ref_y = self.y_plot(self.t,26,0.4,0.4)
             if self.path_marker_done[self.path-1] == False:
-                
+                points = []
                 for i in range(0,1000):
                     p = Point()
                     # p.x = self.x_plot(i,-26,-0.45,-0.4)
                     # p.y = self.y_plot(i,26,0.45,0.4)
-                    p.x = self.x_plot(i,-26,-0.4,-0.4)
-                    p.y = self.y_plot(i,26,0.4,0.4)
+                    p.x = self.x_plot(i,-26,-0.7,-0.4)
+                    p.y = self.y_plot(i,26,0.4,0.5)
                     p.z = 0.0
-                    self.points.append(p)
-                self.path_marker.points = self.points
+                    points.append(p)
+                self.path_marker[self.path-1].points = points
                 self.path_marker_done[self.path-1] = True
 
 
         elif self.path == 3:
             # ref_x = self.x_plot(self.t,-26,0.45,0.4)
             # ref_y = self.y_plot(self.t,-26,0.45,0.4)
-            ref_x = self.x_plot(self.t,-26,0.4,0.4)
-            ref_y = self.y_plot(self.t,-26,0.4,0.4)
+            ref_x = self.x_plot(self.t,-26,0.3,0.4)
+            ref_y = self.y_plot(self.t,-26,0.4,0.46)
             if self.path_marker_done[self.path-1] == False:
-                
+                points = []
                 for i in range(0,1000):
                     p = Point()
                     # p.x = self.x_plot(i,-26,0.45,0.4)
                     # p.y = self.y_plot(i,-26,0.45,0.4)
-                    p.x = self.x_plot(i,-26,0.4,0.4)
-                    p.y = self.y_plot(i,-26,0.4,0.4)
+                    p.x = self.x_plot(i,-26,0.6,0.4)
+                    p.y = self.y_plot(i,-26,0.4,0.5)
                     p.z = 0.0
-                    self.points.append(p)
-                self.path_marker.points = self.points
+                    points.append(p)
+                self.path_marker[self.path-1].points = points
                 self.path_marker_done[self.path-1] = True
 
 
@@ -389,10 +387,10 @@ class MissionPlanner(object):
         elif self.path == 4:
             # ref_x = self.x_plot(self.t,0,-0.5,-0.25)
             # ref_y = self.y_plot(self.t,0,0.5,0.25)
-            ref_x = self.x_plot(self.t,0,-0.4,-0.25)
+            ref_x = self.x_plot(self.t,0,-0.5,-0.25)
             ref_y = self.y_plot(self.t,0,0.4,0.25)
             if self.path_marker_done[self.path-1] == False:
-                
+                points = []
                 for i in range(0,1000):
                     p = Point()
                     # p.x = self.x_plot(i,0,-0.5,-0.25)
@@ -400,37 +398,37 @@ class MissionPlanner(object):
                     p.x = self.x_plot(i,0,-0.4,-0.25)
                     p.y = self.y_plot(i,0,0.4,0.25)
                     p.z = 0.0
-                    self.points.append(p)
-                self.path_marker.points = self.points
+                    points.append(p)
+                self.path_marker[self.path-1].points = points
                 self.path_marker_done[self.path-1] = True
 
 
         elif self.path == 5:
             # ref_x = self.x_plot(self.t,26,0.45,0.4)
             # ref_y = self.y_plot(self.t,26,0.45,0.4)
-            ref_x = self.x_plot(self.t,26,0.4,0.4)
-            ref_y = self.y_plot(self.t,26,0.4,0.4)
+            ref_x = self.x_plot(self.t,26,0.5,0.4)
+            ref_y = self.y_plot(self.t,26,0.4,0.6)
             if self.path_marker_done[self.path-1] == False:
-                
+                points = []
                 for i in range(0,1000):
                     p = Point()
                     # p.x = self.x_plot(i,26,0.45,0.4)
                     # p.y = self.y_plot(i,26,0.45,0.4)
-                    p.x = self.x_plot(i,26,0.4,0.4)
-                    p.y = self.y_plot(i,26,0.4,0.4)
+                    p.x = self.x_plot(i,26,0.5,0.4)
+                    p.y = self.y_plot(i,26,0.5,0.4)
                     p.z = 0.0
-                    self.points.append(p)
-                self.path_marker.points = self.points
+                    points.append(p)
+                self.path_marker[self.path-1].points = points
                 self.path_marker_done[self.path-1] = True
 
 
         elif self.path == 6:
             # ref_x = self.x_plot(self.t,26,-0.45,-0.4)
             # ref_y = self.y_plot(self.t,-26,0.45,0.4)
-            ref_x = self.x_plot(self.t,26,-0.4,-0.4)
-            ref_y = self.y_plot(self.t,-26,0.4,0.4)
+            ref_x = self.x_plot(self.t,26,-0.4,-0.6)
+            ref_y = self.y_plot(self.t,-26,0.4,0.6)
             if self.path_marker_done[self.path-1] == False:
-                
+                points = []
                 for i in range(0,1000):
                     p = Point()
                     # p.x = self.x_plot(i,26,-0.45,-0.4)
@@ -438,17 +436,19 @@ class MissionPlanner(object):
                     p.x = self.x_plot(i,26,-0.4,-0.4)
                     p.y = self.y_plot(i,-26,0.4,0.4)
                     p.z = 0.0
-                    self.points.append(p)
-                self.path_marker.points = self.points
+                    points.append(p)
+                self.path_marker[self.path-1].points = points
                 self.path_marker_done[self.path-1] = True
 
-        self.pubpath_marker.publish(self.path_marker)
-        point = Point()
-        point.x = ref_x
-        point.y = ref_y
-        self.ref_marker.points = [point]
+        self.pubpath_marker.publish(self.path_marker[self.path-1])
+        points = Point()
+        points.x = ref_x
+        points.y = ref_y
+        self.ref_marker.points = [points]
         self.pubref_marker.publish(self.ref_marker)
 
+
+ 
         if self.t > self.counter*35:
             self.path += 1
             self.counter += 1
@@ -462,19 +462,43 @@ class MissionPlanner(object):
         #print("Time    : ",self.t)
         #print("Counter : ",self.counter)
 
-        if math.sqrt(self.x0**2+self.y0**2) > 0.5:
+        if math.sqrt(self.x0**2+self.y0**2) > 0.4:
             print("return")
             self.translate(0, 0, self.yaw0)
         else:
             if self.inside_arena([ref_x, ref_y])==True:
                 #if target is inside arena
-                if self.path < 4:
-                    # self.translate(ref_x, ref_y, self.yaw0 + self.path*20*math.pi/180)
-                    self.translate(ref_x, ref_y, self.yaw0 + self.path*20*math.pi/180)
-                else:
-                    # self.translate(ref_x, ref_y, self.yaw0 - self.path*20*math.pi/180)
-                    self.translate(ref_x, ref_y, self.yaw0 - self.path*20*math.pi/180)
+                self.translate(ref_x, ref_y, self.yaw0 + (self.path-6)*30*math.pi/180)
 
+
+    def passive_dodge_new(self):
+
+        #from current position, random a direction to append radius to, limit x and y afterwards, once at the edges, add to-origin vector
+        beta=random.uniform(-math.pi, math.pi)
+
+        d=0.3
+
+        pred=[self.x0+d*math.cos(beta), self.y0+d*math.sin(beta)]
+
+        #constrain 
+        if abs(pred[0])>0.7:
+            pred[0]=pred[0]*0.7/abs(pred[0])
+        elif abs(pred[1])>0.7:
+            pred[1]=pred[1]*0.7/abs(pred[1])
+
+
+        if math.sqrt(self.x0**2+self.y0**2)>0.5:
+            #add to origin vector
+            delta=math.atan2(-self.y0, -self.x0)
+            #print(delta*180/math.pi)
+            pred=[pred[0]+0.2*math.cos(delta), pred[1]+0.2*math.sin(delta)]
+    
+
+        direction=random.uniform(-math.pi/2, math.pi/2)
+
+        self.translate(pred[0], pred[1], self.yaw0+direction)
+
+        
     def inside_arena(self, pos):
         #check whether pos is inside arena, assuming origin 0,0 in middle
         #border [x_min, x_max, y_min, y_max]
@@ -528,8 +552,8 @@ class MissionPlanner(object):
 
         self.cmd_y = self.bias - y_linear_vel
 
-        #print(self.d_ang *ang_derivative)
-        #print(self.p_ang * ang_error)
+        print(self.d_ang *ang_derivative)
+        print(self.p_ang * ang_error)
 
         angular_vel = (self.p_ang * ang_error) + (self.d_ang * ang_derivative) + (self.i_ang * self.ang_integral)
 
@@ -556,7 +580,7 @@ class MissionPlanner(object):
         elif self.ang_integral < -self.ang_integral_threshold:
             self.ang_integral = -self.ang_integral_threshold
 
-        #print(self.d_ang * derivative)
+        print(self.d_ang * derivative)
         
         angular_vel = (self.p_ang * ang_error) + (self.d_ang * derivative) + (self.i_ang * self.ang_integral)
 
