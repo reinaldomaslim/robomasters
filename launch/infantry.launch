@@ -1,0 +1,23 @@
+<launch>
+
+	<node 
+		name="dji_ros" pkg="dji_ros" type="dji_ros" respawn="true">
+	</node>
+
+	<node
+	 	name="serial_node" pkg="rosserial_python" type="serial_node.py"  args="/dev/arduino" respawn="true">
+	</node>
+
+    	<node pkg="nodelet" type="nodelet" name="nodelet_manager" args="manager"/>
+ 	<node pkg="nodelet" type="nodelet" name="camera" args="load uvc_camera/CameraNodelet nodelet_manager" />
+  		<remap from="yolo2/image_raw" to="image_raw" />
+  	<node pkg="nodelet" type="nodelet" name="yolo2" args="load yolo2/Yolo2Nodelet nodelet_manager">
+    		<param name="confidence" value="0.5" />
+    		<param name="nms" value="0.4" />
+ 	</node>
+
+	<node
+    		name="small_buff" pkg="robomasters" type="buff.py" respawn="true">
+  	</node>
+
+</launch>
