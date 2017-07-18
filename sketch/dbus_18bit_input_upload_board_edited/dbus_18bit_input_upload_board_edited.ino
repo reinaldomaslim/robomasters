@@ -10,6 +10,7 @@
 #include <ros/time.h>
 #include <sensor_msgs/Joy.h>
 #include <geometry_msgs/Twist.h>
+#include <std_msgs/Bool.h>
 
 //there are two versions of DJI controller protocol
 // one is the latestest firmware with 25 bits with 7 channel
@@ -47,8 +48,10 @@ float ROS_Localization_Upload[6]  = {0, 0, 0, 0, 0, 0};
 
 
 int led = 13; 
+int colorPin = 22;
 uint32_t currTime, displayTime = 0;
 uint8_t i;
+boolean pubd = false;
 
 //ros
 ros::NodeHandle nh;
@@ -58,9 +61,11 @@ void readLocalizationSystem(void);
 void publish_localization(void);
 sensor_msgs::Joy joy_msg;
 geometry_msgs::Twist localization_msg;
+std_msgs::Bool clr_msg;
 ros::Subscriber<sensor_msgs::Joy> sub_joy("/cmd_vel", joy_cb);
 ros::Publisher pub_joy( "/joy_msg", &joy_msg);
 ros::Publisher pub_localization( "/localization", &localization_msg);
+ros::Publisher pub_clr("/color", &clr_msg);
 char frameid[] = "/joy_msg";
 
 
@@ -69,6 +74,7 @@ void publish_data(void);
 
 void setup(){
   pinMode(led, OUTPUT);
+  pinMode(colorPin, INPUT);
   //Serial.begin(115200);
   Serial2.begin(115200);
   //Serial.println("DBUS Status");
@@ -80,10 +86,12 @@ void setup(){
   nh.initNode();
   nh.advertise(pub_joy);
   nh.advertise(pub_localization);
+  nh.advertise(pub_clr);
   nh.subscribe(sub_joy);
   joy_msg.header.frame_id = frameid;
   joy_msg.buttons_length=channel;
   //joy_msg.axes_length=6;
+
 
   
 }
@@ -127,7 +135,11 @@ void joy_cb( const sensor_msgs::Joy& joy){
   }
   Serial2.write(0xDE);
   
-    
+  if (!pubd) {
+    clr_msg.data = digitalRead(colorPin);
+    pub_clr.publish(&clr_msg);
+    pubd = true;
+  }
 }
 void publish_data(void){
   publish_joy();
@@ -144,6 +156,7 @@ void publish_localization(void){
   pub_localization.publish(&localization_msg);
   
 }
+
 float pos_x=0;
 float pos_y=0;
 float zangle=0;
