@@ -20,7 +20,7 @@
     <include file="$(find base_vision)/launch/armor_detection.launch" />
     
     <!--dodging and shooting-->
-    <node name="dodge_and_shoot" pkg="robomasters" type="dodge_and_shoot.py" respawn="true" />
+    <node name="dodgenshoot" pkg="robomasters" type="dodgenshoot.py" respawn="true" />
     
 
 </launch>
