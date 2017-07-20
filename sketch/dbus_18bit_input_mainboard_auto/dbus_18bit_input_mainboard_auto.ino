@@ -232,16 +232,32 @@ void write18BitsDbusData(){
       
   
   
-  DBus_Final_Output[CHANNEL_R] = DBus_Output[CHANNEL_R];
-  if(DBus_Output[CHANNEL_L] == CHANNEL_UP && currTime - updatetime < 500){
-    //auto mode
-    DBus_Final_Output[LEFT_UD] = ROS_Output[LEFT_UD];
-    DBus_Final_Output[LEFT_LR] = ROS_Output[LEFT_LR];
-    DBus_Final_Output[RIGHT_UD] = ROS_Output[RIGHT_UD];
-    DBus_Final_Output[RIGHT_LR] = ROS_Output[RIGHT_LR];
-    DBus_Final_Output[CHANNEL_L] = ROS_Output[CHANNEL_L];
-  }else{
+  if (currTime - dBus.updatetime > 500){
+    
+    if (currTime - updatetime < 500){
+      DBus_Final_Output[CHANNEL_R] = CHANNEL_UP;
+      DBus_Final_Output[LEFT_UD] = ROS_Output[LEFT_UD];
+      DBus_Final_Output[LEFT_LR] = ROS_Output[LEFT_LR];
+      DBus_Final_Output[RIGHT_UD] = ROS_Output[RIGHT_UD];
+      DBus_Final_Output[RIGHT_LR] = ROS_Output[RIGHT_LR];
+      DBus_Final_Output[CHANNEL_L] = ROS_Output[CHANNEL_L];
+    }
+    
+    else{
+      DBus_Output[CHANNEL_L] = CHANNEL_MID;
+      DBus_Final_Output[CHANNEL_L] = shooting(0);
+      if (shoot==0) DBus_Final_Output[CHANNEL_R] = CHANNEL_MID;
+      else DBus_Final_Output[CHANNEL_R] = CHANNEL_UP;
+      DBus_Final_Output[LEFT_LR] = 1024;
+      DBus_Final_Output[RIGHT_UD] = 1024;
+      DBus_Final_Output[RIGHT_LR] = 1024;
+      DBus_Final_Output[LEFT_UD] = 1024;
+    }
+  }
+  
+  else{
     DBus_Final_Output[CHANNEL_L] = shooting(0);
+    DBus_Final_Output[CHANNEL_R] = DBus_Output[CHANNEL_R];
     DBus_Final_Output[LEFT_UD] = DBus_Output[LEFT_UD];
     DBus_Final_Output[LEFT_LR] = DBus_Output[LEFT_LR];
     DBus_Final_Output[RIGHT_UD] = DBus_Output[RIGHT_UD];
@@ -253,25 +269,13 @@ void write18BitsDbusData(){
     pinMode(reset, OUTPUT);
     digitalWrite(reset, LOW);
   }
-  
-  if(currTime - dBus.updatetime > 500){
-    DBus_Output[CHANNEL_L] = CHANNEL_MID;
-    DBus_Final_Output[CHANNEL_L] = shooting(0);
-    if (shoot==0) DBus_Final_Output[CHANNEL_R] = CHANNEL_MID;
-    else DBus_Final_Output[CHANNEL_R] = CHANNEL_UP;
-    DBus_Final_Output[LEFT_LR] = 1024;
-    DBus_Final_Output[RIGHT_UD] = 1024;
-    DBus_Final_Output[RIGHT_LR] = 1024;
-    DBus_Final_Output[LEFT_UD] = 1024;
-  }
 
   //send signal to remove oscillations
   if (DBus_Final_Output[LEFT_LR] == 1024 && DBus_Final_Output[LEFT_UD] == 1024 && DBus_Final_Output[RIGHT_LR] == 1024 && DBus_Final_Output[RIGHT_UD] == 1024) osc_count++;
   else osc_count = 0;
   if (osc_count > 2000) {
-    osc_count = 0;
-    if (osc_turn==0) { DBus_Final_Output[LEFT_UD] = 1034; osc_turn = 1; }
-    else if (osc_turn==1) { DBus_Final_Output[LEFT_UD] = 1014; osc_turn = 0; }
+    osc_turn==0 ? DBus_Final_Output[LEFT_UD] = 1034 : DBus_Final_Output[LEFT_UD] = 1014;
+    if (osc_count > 2005) { osc_count = 0;  osc_turn==1 ? osc_turn=0 : osc_turn=1 ; }
   }
 
   //prevent kill cos can't pitch up after
@@ -371,5 +375,6 @@ void printDBUSStatus()
   } else if (dBus.Failsafe() == DBUS_SIGNAL_OK) {
     Serial.print("OK");
   }
+  Serial.println(".");
   
 }
