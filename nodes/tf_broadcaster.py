@@ -12,7 +12,8 @@ class TfBroadcaster(object):
     initialize_localizer=True
     
     #the cg of robot when firstly launched wrt to map frame
-    cg_origin=[0, 0]
+    #cg is at the left bottom corner
+    cg_origin=[-0.75, 0.75]
 
     def __init__(self, nodename):
         rospy.init_node('tf_broadcaster')
@@ -70,8 +71,8 @@ class TfBroadcaster(object):
             p=msg.linear.x-self.x_off
             q=msg.linear.y-self.y_off
 
-            linear_x=p*math.cos(self.yaw_off*math.pi/180)+q*math.sin(self.yaw_off*math.pi/180)
-            linear_y=-p*math.sin(self.yaw_off*math.pi/180)+q*math.cos(self.yaw_off*math.pi/180)
+            linear_x=p*math.cos(self.yaw_off*math.pi/180)+q*math.sin(self.yaw_off*math.pi/180)-self.cg_origin[0]
+            linear_y=-p*math.sin(self.yaw_off*math.pi/180)+q*math.cos(self.yaw_off*math.pi/180)-self.cg_origin[1]
             angular_z=msg.angular.z-self.yaw_off
 
             #broadcast odom tf
