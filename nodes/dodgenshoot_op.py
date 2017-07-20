@@ -328,16 +328,16 @@ class MissionPlanner(object):
         if self.path == 1:
             # ref_x = self.x_plot(self.t,0,0.5,0.25)
             # ref_y = self.y_plot(self.t,0,0.5,0.25)
-            ref_x = self.x_plot(self.t,0,0.55,0.55)
-            ref_y = self.y_plot(self.t,0,0.55,0.55)
+            ref_x = self.x_plot(self.t,0,0.4,0.25)
+            ref_y = self.y_plot(self.t,0,0.4,0.25)
             if self.path_marker_done[self.path-1] == False:
                 points = []
                 for i in range(0,1000):
                     p = Point()
                     # p.x = self.x_plot(i,0,0.5,0.25)
                     # p.y = self.y_plot(i,0,0.5,0.25)
-                    p.x = self.x_plot(i,0,0.55,0.55)
-                    p.y = self.y_plot(i,0,0.55,0.55)
+                    p.x = self.x_plot(i,0,0.4,0.25)
+                    p.y = self.y_plot(i,0,0.4,0.25)
                     p.z = 0.0
                     points.append(p)
                 self.path_marker[self.path-1].points = points
@@ -347,16 +347,16 @@ class MissionPlanner(object):
         elif self.path == 2:
             # ref_x = self.x_plot(self.t,-26,-0.45,-0.4)
             # ref_y = self.y_plot(self.t,26,0.45,0.4)
-            ref_x = self.x_plot(self.t,-0,-0.45,-0.45)
-            ref_y = self.y_plot(self.t,0,0.45,0.45)
+            ref_x = self.x_plot(self.t,-26,-0.4,-0.4)
+            ref_y = self.y_plot(self.t,26,0.4,0.4)
             if self.path_marker_done[self.path-1] == False:
                 points = []
                 for i in range(0,1000):
                     p = Point()
                     # p.x = self.x_plot(i,-26,-0.45,-0.4)
                     # p.y = self.y_plot(i,26,0.45,0.4)
-                    p.x = self.x_plot(i,-0,-0.45,-0.45)
-                    p.y = self.y_plot(i,0,0.45,0.45)
+                    p.x = self.x_plot(i,-26,-0.7,-0.4)
+                    p.y = self.y_plot(i,26,0.4,0.5)
                     p.z = 0.0
                     points.append(p)
                 self.path_marker[self.path-1].points = points
@@ -366,16 +366,16 @@ class MissionPlanner(object):
         elif self.path == 3:
             # ref_x = self.x_plot(self.t,-26,0.45,0.4)
             # ref_y = self.y_plot(self.t,-26,0.45,0.4)
-            ref_x = self.x_plot(self.t,-0,0.6,0.6)
-            ref_y = self.y_plot(self.t,-0,0.6,0.6)
+            ref_x = self.x_plot(self.t,-26,0.3,0.4)
+            ref_y = self.y_plot(self.t,-26,0.4,0.46)
             if self.path_marker_done[self.path-1] == False:
                 points = []
                 for i in range(0,1000):
                     p = Point()
                     # p.x = self.x_plot(i,-26,0.45,0.4)
                     # p.y = self.y_plot(i,-26,0.45,0.4)
-                    p.x = self.x_plot(i,-0,0.6,0.6)
-                    p.y = self.y_plot(i,-0,0.6,0.6)
+                    p.x = self.x_plot(i,-26,0.6,0.4)
+                    p.y = self.y_plot(i,-26,0.4,0.5)
                     p.z = 0.0
                     points.append(p)
                 self.path_marker[self.path-1].points = points
@@ -386,16 +386,16 @@ class MissionPlanner(object):
         elif self.path == 4:
             # ref_x = self.x_plot(self.t,0,-0.5,-0.25)
             # ref_y = self.y_plot(self.t,0,0.5,0.25)
-            ref_x = self.x_plot(self.t,0,-0.55,-0.55)
-            ref_y = self.y_plot(self.t,0,0.55,0.55)
+            ref_x = self.x_plot(self.t,0,-0.5,-0.25)
+            ref_y = self.y_plot(self.t,0,0.4,0.25)
             if self.path_marker_done[self.path-1] == False:
                 points = []
                 for i in range(0,1000):
                     p = Point()
                     # p.x = self.x_plot(i,0,-0.5,-0.25)
                     # p.y = self.y_plot(i,0,0.5,0.25)
-                    p.x = self.x_plot(i,0,-0.55,-0.55)
-                    p.y = self.y_plot(i,0,0.55,0.55)
+                    p.x = self.x_plot(i,0,-0.4,-0.25)
+                    p.y = self.y_plot(i,0,0.4,0.25)
                     p.z = 0.0
                     points.append(p)
                 self.path_marker[self.path-1].points = points
@@ -405,16 +405,16 @@ class MissionPlanner(object):
         elif self.path == 5:
             # ref_x = self.x_plot(self.t,26,0.45,0.4)
             # ref_y = self.y_plot(self.t,26,0.45,0.4)
-            ref_x = self.x_plot(self.t,0,0.6,0.6)
-            ref_y = self.y_plot(self.t,0,0.6,0.6)
+            ref_x = self.x_plot(self.t,26,0.5,0.4)
+            ref_y = self.y_plot(self.t,26,0.4,0.6)
             if self.path_marker_done[self.path-1] == False:
                 points = []
                 for i in range(0,1000):
                     p = Point()
                     # p.x = self.x_plot(i,26,0.45,0.4)
                     # p.y = self.y_plot(i,26,0.45,0.4)
-                    p.x = self.x_plot(i,0,0.6,0.6)
-                    p.y = self.y_plot(i,0,0.6,0.6)
+                    p.x = self.x_plot(i,26,0.5,0.4)
+                    p.y = self.y_plot(i,26,0.5,0.4)
                     p.z = 0.0
                     points.append(p)
                 self.path_marker[self.path-1].points = points
@@ -424,16 +424,16 @@ class MissionPlanner(object):
         elif self.path == 6:
             # ref_x = self.x_plot(self.t,26,-0.45,-0.4)
             # ref_y = self.y_plot(self.t,-26,0.45,0.4)
-            ref_x = self.x_plot(self.t,0,-0.5,-0.5)
-            ref_y = self.y_plot(self.t,-0,0.5,0.5)
+            ref_x = self.x_plot(self.t,26,-0.4,-0.6)
+            ref_y = self.y_plot(self.t,-26,0.4,0.6)
             if self.path_marker_done[self.path-1] == False:
                 points = []
                 for i in range(0,1000):
                     p = Point()
                     # p.x = self.x_plot(i,26,-0.45,-0.4)
                     # p.y = self.y_plot(i,-26,0.45,0.4)
-                    p.x = self.x_plot(i,0,-0.5,-0.5)
-                    p.y = self.y_plot(i,-0,0.5,0.5)
+                    p.x = self.x_plot(i,26,-0.4,-0.4)
+                    p.y = self.y_plot(i,-26,0.4,0.4)
                     p.z = 0.0
                     points.append(p)
                 self.path_marker[self.path-1].points = points
@@ -448,14 +448,14 @@ class MissionPlanner(object):
 
 
  
-        if self.t > self.counter*100:
+        if self.t > self.counter*35:
             self.path += 1
             self.counter += 1
         
         if self.path > 6:
             self.path = 1
 
-        self.t += 1
+        self.t += 1.0
 
         #print("Path    : ",self.path)
         #print("Time    : ",self.t)
