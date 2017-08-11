@@ -13,7 +13,7 @@ class TfBroadcaster(object):
     
     #the cg of robot when firstly launched wrt to map frame
     #cg is at the left bottom corner
-    cg_origin=[-0.75, 0.75]
+    cg_origin=[-0.75, -0.75]
 
     def __init__(self, nodename):
         rospy.init_node('tf_broadcaster')
