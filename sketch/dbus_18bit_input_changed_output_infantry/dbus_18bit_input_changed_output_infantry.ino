@@ -50,7 +50,7 @@ static uint16_t DBus_Final_Output[channel]  = {1024, 1024, 1024, 1024, CHANNEL_M
 
 DJI_DBUS dBus(Serial1);
 int led = 13; 
-int reset = 8;
+int reset = 22;
 uint32_t currTime, displayTime = 0;
 uint8_t i;
 
@@ -111,86 +111,43 @@ void loop(){
     digitalWrite(led, LOW);
 }
 
-int shooting(int cmd){
-  //0: not shooting, channel mid
-  //1: motor running, channel up
-  //2: shooting, channel down
-  //3: not shooting, channel up
-  //4: motor running, channel mid
-  
-  unsigned int curr = millis();
-  if (cmd==1){
-    if (shoot==3 && (curr - lastChange) > chgTime){
-      shoot = 0; lastChange = curr; }
-    else if (shoot==0 && (curr - lastChange) > chgTime){
-      shoot = 1; lastChange = curr; }
-    else if (shoot==1 && (curr - lastChange) > chgTime){
-      shoot = 4; lastChange = curr; }
-    else if (shoot==4 && (curr - lastChange) > chgTime){
-      shoot = 2; lastChange = curr; }
-  }
-  
-  else if (cmd==0){
-    if (shoot==1 && (curr - lastChange) > chgTime){ 
-      shoot = 4; lastChange = curr; }
-    else if (shoot==2 && (curr - lastChange) > chgTime){
-      shoot = 4; lastChange = curr; }
-    else if (shoot==4 && (curr - lastChange) > chgTime){
-      shoot = 3; lastChange = curr; }
-    else if (shoot==3 && (curr - lastChange) > chgTime){
-      shoot = 0; lastChange = curr; }
-  }
-  
-  if (shoot==0) return CHANNEL_MID;
-  else if (shoot==1) return (uint16_t)CHANNEL_UP;
-  else if (shoot==2) return (uint16_t)CHANNEL_DOWN;
-  else if (shoot==4) return (uint16_t)CHANNEL_MID;
-  else if (shoot==5) return (uint16_t)CHANNEL_MID;
-  else if (shoot==3) return (uint16_t)CHANNEL_UP;
-}
-
 void joy_cb( const sensor_msgs::Joy& joy){
   updatetime = millis();
   //right button up means auto
   //sequence : left_LR left_UD shoot
     ROS_Output[LEFT_LR] = (uint16_t)(joy.buttons[0]);
     ROS_Output[LEFT_UD] = (uint16_t)(joy.buttons[1]);
-    if (DBus_Output[CHANNEL_R] == CHANNEL_UP) ROS_Output[CHANNEL_L] = shooting(joy.buttons[2]);
-    else ROS_Output[CHANNEL_L] = CHANNEL_MID;
 }
+
 void write18BitsDbusData(){
   //05 04 20 00 01 D8 00 00 00 00 00 00 00 00 00 00 00 00 original 
   //00 04 20 00 01 58 00 00 00 00 00 00 00 00 00 00 00 00 adjusted    
   
   DBus_Final_Output[RIGHT_UD] = DBus_Output[RIGHT_UD];
   DBus_Final_Output[RIGHT_LR] = DBus_Output[RIGHT_LR];
-  if(DBus_Output[CHANNEL_R] == CHANNEL_UP && currTime - updatetime < 500){
+  DBus_Final_Output[CHANNEL_L] = DBus_Output[CHANNEL_L];
+  if(DBus_Output[CHANNEL_R] == CHANNEL_UP && currTime - updatetime < 200){
     //auto mode
     DBus_Final_Output[LEFT_UD] = ROS_Output[LEFT_UD];
     DBus_Final_Output[LEFT_LR] = ROS_Output[LEFT_LR];
-    DBus_Final_Output[CHANNEL_L] = ROS_Output[CHANNEL_L];
     DBus_Final_Output[CHANNEL_R] = CHANNEL_UP;
     
   }else{
-    if (DBus_Output[CHANNEL_R] == CHANNEL_DOWN && shoot==0) DBus_Final_Output[CHANNEL_R] = CHANNEL_DOWN;
+    if (DBus_Output[CHANNEL_R] == CHANNEL_DOWN) DBus_Final_Output[CHANNEL_R] = CHANNEL_DOWN;
     else DBus_Final_Output[CHANNEL_R] = CHANNEL_UP;
     DBus_Final_Output[LEFT_UD] = DBus_Output[LEFT_UD];
     DBus_Final_Output[LEFT_LR] = DBus_Output[LEFT_LR];
-    if (shoot==0 && (currTime - lastChange) > chgTime) DBus_Final_Output[CHANNEL_L] = DBus_Output[CHANNEL_L];
-    else DBus_Final_Output[CHANNEL_L] = shooting(0);
   }
   
   //add safety system
-  if (DBus_Output[CHANNEL_L] == 0 && DBus_Output[CHANNEL_R]==0 && dBus.updatetime > 1000) {
+  if (DBus_Output[CHANNEL_L] == 0 && DBus_Output[CHANNEL_R]==0 && dBus.updatetime > 500) {
     pinMode(reset, OUTPUT);
     digitalWrite(reset, LOW);
   }
   
   if(currTime - dBus.updatetime > 500){  
-    DBus_Output[CHANNEL_L] = CHANNEL_MID;
-    DBus_Final_Output[CHANNEL_L] = shooting(0);
-    if (shoot==0) DBus_Final_Output[CHANNEL_R] = CHANNEL_DOWN;
-    else DBus_Final_Output[CHANNEL_R] = CHANNEL_UP;
+    DBus_Final_Output[CHANNEL_L] = CHANNEL_MID;
+    DBus_Final_Output[CHANNEL_R] = CHANNEL_DOWN;
     DBus_Final_Output[LEFT_LR] = 1024;
     DBus_Final_Output[RIGHT_UD] = 1024;
     DBus_Final_Output[RIGHT_LR] = 1024;
