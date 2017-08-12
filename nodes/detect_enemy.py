@@ -32,10 +32,10 @@ class FindEnemy(object):
 
     x0, y0, yaw0=0,0, 0
 
-    wall_x=-2.8
-    wall_y=-2.8
+    wall_x=-1.0
+    wall_y=-1.0
 
-    x_off=0.215
+    x_off=0.205
     #ignore detections on own body, units in angle
 
 
@@ -86,7 +86,7 @@ class FindEnemy(object):
     def detect_enemy(self, grid):
 
         X = StandardScaler().fit_transform(grid)
-        db = DBSCAN(eps=0.2, min_samples=4).fit(X)
+        db = DBSCAN(eps=0.2, min_samples=3).fit(X)
         
         core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
         core_samples_mask[db.core_sample_indices_] = True
@@ -107,9 +107,9 @@ class FindEnemy(object):
             pos_x=center[0][0]
             pos_y=center[0][1]
 
-            # if pos_x<self.wall_x or pos_y<self.wall_y:
-            #     #these are false positives from walls
-            #     continue
+            if pos_x<self.wall_x or pos_y<self.wall_y:
+                 #these are false positives from walls
+                 continue
 
             cluster_centers.append([pos_x, pos_y])
 
@@ -130,7 +130,7 @@ class FindEnemy(object):
             p.y=x[1]
             p.z=0
 
-            if abs(p.x)>1.7 or abs(p.y)>1.5:
+            if abs(p.x)>1.8 or abs(p.y)>1.8:
                 continue
 
             self.markers.points.append(p)

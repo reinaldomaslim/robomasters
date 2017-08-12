@@ -48,7 +48,7 @@ float ROS_Localization_Upload[6]  = {0, 0, 0, 0, 0, 0};
 
 
 int led = 13; 
-int colorPin = 22;
+int colorPin = 24;
 uint32_t currTime, displayTime = 0;
 uint8_t i;
 boolean pubd = false;
@@ -56,6 +56,7 @@ boolean pubd = false;
 //ros
 ros::NodeHandle nh;
 void joy_cb( const sensor_msgs::Joy& joy);
+void setColor(void);
 void publish_joy(void);
 void readLocalizationSystem(void);
 void publish_localization(void);
@@ -107,6 +108,7 @@ void loop(){
   if(displayTime < currTime) {
       displayTime = currTime + 20;
       publish_data();
+      if (!pubd) setColor();
       nh.spinOnce();
       //printDBUSStatus();
       //upload_data_display();
@@ -134,8 +136,10 @@ void joy_cb( const sensor_msgs::Joy& joy){
     Serial2.write(ROS_Output.toByte[i]);
   }
   Serial2.write(0xDE);
-  
-  if (!pubd) {
+}
+void setColor(void) {
+  int s;
+  if (nh.getParam("/armor_detection/start", &s)) {
     clr_msg.data = digitalRead(colorPin);
     pub_clr.publish(&clr_msg);
     pubd = true;

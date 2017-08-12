@@ -59,16 +59,6 @@ class MissionPlanner(object):
     lin_integral_threshold = 50.0
     ang_integral_threshold = 20.0
 
-	    #new passive dodging params
-    istranslate = 1
-    beta=random.uniform(-math.pi, math.pi)
-    direction=random.uniform(math.pi/4, math.pi/2)
-    counter = 1
-    start_trans=True
-    yaw_counter=0
-
-
-
     # path function parameters
     T_step =100.0   #time step in ms, 10Hz
     Ax = 1.0    #amplitude
@@ -205,15 +195,11 @@ class MissionPlanner(object):
             if len(self.enemy_pos)==1:
                  #if only one, active dodging 
                 self.active_dodge()
-                if self.cmd_shoot==0:
-                    self.cmd_shoot=1
             else:
 
                 #more than one, passive dodge
-                #self.passive_dodge_new()
-		self.bumpy_passive()
-                self.cmd_shoot=0		
-
+                self.passive_dodge_new()
+            
             # msg=Joy()
             
             #do priority that governs yawing (lidar or vision)
@@ -240,47 +226,16 @@ class MissionPlanner(object):
                 self.pubimg.publish(self.img)
                 self.state_x=0
                 self.state_y=0
+                self.cmd_shoot=0
                 self.cmd_pitch=self.bias
                 msg.buttons=[int(self.cmd_x), int(self.cmd_y), int(self.cmd_yaw), int(self.cmd_pitch), int(self.cmd_shoot)]
             #msg.buttons=[int(self.cmd_x), int(self.cmd_y), int(self.cmd_yaw), int(self.cmd_pitch), int(self.cmd_shoot)]
-            print(msg)
+            #print(msg)
             self.cmd_vel_pub.publish(msg)
 
             rate.sleep()
 
         self.stop()
-
-    def bumpy_passive(self):
-	if self.yaw_counter<30:
-            self.cmd_yaw=int(random.uniform(1400, 1550))	
-	else:
-	    self.cmd_yaw=int(random.uniform(600, 750))
-	print(self.cmd_yaw, self.yaw_counter)
-	if self.yaw_counter>100:
-	    self.yaw_counter=0
-
-	if self.counter<10:
-	    self.cmd_x=int(random.uniform(1224, 1350))
-	    self.cmd_y=self.bias 
-
-	elif self.counter<20:
-	    self.cmd_y=int(random.uniform(1200, 1324))
-	    self.cmd_x=self.bias
-
-	elif self.counter<30:
-            self.cmd_x=int(random.uniform(680, 824))
-            self.cmd_y=self.bias
-
-	elif self.counter<40:
-            self.cmd_y=int(random.uniform(680, 824))
-            self.cmd_x=self.bias
-
-        if self.counter>40:
-	    self.counter=0
-	
-	self.yaw_counter+=1
-	self.counter+=1
-
     def generate_path(self):
         pass
 
@@ -315,7 +270,7 @@ class MissionPlanner(object):
             
             #print("translate")
             #the higher d, the faster 
-            d=0.4
+            d=0.6
             
             #direction to the left
             beta1=heading+math.pi/2
@@ -516,82 +471,33 @@ class MissionPlanner(object):
 
 
     def passive_dodge_new(self):
-        #self.istranslate=1
-        if self.istranslate%2 == 0:
-            #===========================ROTATION===============================
-            #from current position, random a direction to append radius to, limit x and y afterwards, once at the edges, add to-origin vector
-            d=0.3
+
+        #from current position, random a direction to append radius to, limit x and y afterwards, once at the edges, add to-origin vector
+        beta=random.uniform(-math.pi, math.pi)
+
+        d=0.5
+
+        pred=[self.x0+d*math.cos(beta), self.y0+d*math.sin(beta)]
+
+        #constrain 
+        if abs(pred[0])>0.7:
+            pred[0]=pred[0]*0.7/abs(pred[0])
+        elif abs(pred[1])>0.7:
+            pred[1]=pred[1]*0.7/abs(pred[1])
+
+
+        if math.sqrt(self.x0**2+self.y0**2)>0.5:
+            #add to origin vector
+            delta=math.atan2(-self.y0, -self.x0)
+            #print(delta*180/math.pi)
+            pred=[pred[0]+0.2*math.cos(delta), pred[1]+0.2*math.sin(delta)]
+    
+
+        direction=random.uniform(-math.pi/4, math.pi/4)
+
+        self.translate(pred[0], pred[1], self.yaw0+direction)
+
         
-            pred=[self.x0+d*math.cos(self.beta), self.y0+d*math.sin(self.beta)]
-            self.direction=random.uniform(math.pi/3,math.pi/1.5)
- 	    self.direction=((-1)**(int(self.counter/2)))*self.direction
-
-            #constrain (within the absolute boundary)
-            if abs(pred[0])>0.6:
-                pred[0]=pred[0]*0.6/abs(pred[0])
-            if abs(pred[1])>0.6:
-                pred[1]=pred[1]*0.6/abs(pred[1])
-                    
-            if math.sqrt(self.x0**2+self.y0**2)>0.5:
-                #add to origin vector
-                delta=math.atan2(-self.y0, -self.x0)
-                #print(delta*180/math.pi)
-                pred=[pred[0]+0.2*math.cos(delta), pred[1]+0.2*math.sin(delta)]
-
-            #do the translation
-            self.translate(pred[0], pred[1], self.yaw0+self.direction)
-            self.t += 1
-
-            #escape condition           
-            if self.t>self.counter*25:
-                         
-                self.beta=random.uniform(-math.pi, math.pi)
-                #self.direction=random.uniform(math.pi/3, math.pi/1.5)
-                #self.direction=((-1)**(int(self.counter/2)))*self.direction
-		self.istranslate=int(random.uniform(1, 10))
-                self.counter += 1
-
-                        
-            #==================================================================
-
-        else:
-            #===========================TRANSLATION============================
-            #from current position, random a direction to append radius to, limit x and y afterwards, once at the edges, add to-origin vector
-            d=0.6
-            if self.start_trans==True:
-                pred=[self.x0+d*math.cos(self.beta), self.y0+d*math.sin(self.beta)]
-
-           	#constrain (within the absolute boundary)
-            	if abs(pred[0])>0.7:
-                    pred[0]=pred[0]*0.7/abs(pred[0])
-            	if abs(pred[1])>0.7:
-                    pred[1]=pred[1]*0.7/abs(pred[1])
-                
-		self.target=pred
-		self.start_trans=False
-     
-            if math.sqrt(self.x0**2+self.y0**2)>0.5:
-                #add to origin vector
-                delta=math.atan2(-self.y0, -self.x0)
-                #print(delta*180/math.pi)
-                self.target=[self.target[0]+0.3*math.cos(delta), self.target[1]+0.3*math.sin(delta)]
-
-            self.translate(self.target[0], self.target[1], self.yaw0)
-            self.t += 1
-
-            #escape condition
-            if self.t>self.counter*30 or math.sqrt((self.x0-self.target[0])**2+(self.y0-self.target[1])**2)<0.2:
-                self.beta=random.uniform(-math.pi, math.pi)
-                
-                #escape booleans
-                self.istranslate=int(random.uniform(1, 10))
-		self.start_trans=True
-                self.counter += 1
-            
-            #==================================================================
-	print(self.counter, self.istranslate, self.direction)        
-
-
     def inside_arena(self, pos):
         #check whether pos is inside arena, assuming origin 0,0 in middle
         #border [x_min, x_max, y_min, y_max]

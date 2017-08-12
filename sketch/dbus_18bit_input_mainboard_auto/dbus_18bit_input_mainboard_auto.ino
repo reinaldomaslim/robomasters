@@ -66,7 +66,7 @@ void read_joy_cmd(void);
 
 void setup(){
   pinMode(led, OUTPUT);
-  //Serial.begin(115200);
+  Serial.begin(115200);
   Serial2.begin(100000,SERIAL_8E1);
   dBus.begin();
   Serial3.begin(115200);
@@ -100,7 +100,7 @@ void loop(){
         joy_pub_count=0;
         publish_joy();
       }
-      //printDBUSStatus();
+      printDBUSStatus();
   }
 
   
@@ -156,8 +156,8 @@ void read_joy_cmd( ){
         ROS_Output[RIGHT_LR] = joy_cmd.joyData[1];
         ROS_Output[LEFT_LR] = joy_cmd.joyData[2];
         ROS_Output[LEFT_UD] = joy_cmd.joyData[3];
-        if(DBus_Output[CHANNEL_L] != CHANNEL_UP) ROS_Output[CHANNEL_L] = CHANNEL_MID;
-        else ROS_Output[CHANNEL_L] = shooting(joy_cmd.joyData[4]);
+        if(currTime - dBus.updatetime > 500 || DBus_Output[CHANNEL_R]==CHANNEL_UP) ROS_Output[CHANNEL_L] = shooting(joy_cmd.joyData[4]);
+        else ROS_Output[CHANNEL_L] = CHANNEL_MID;
 	      joy_cmd_flag=0;
         break;
 			 
@@ -256,12 +256,25 @@ void write18BitsDbusData(){
   }
   
   else{
-    DBus_Final_Output[CHANNEL_L] = shooting(0);
-    DBus_Final_Output[CHANNEL_R] = DBus_Output[CHANNEL_R];
-    DBus_Final_Output[LEFT_UD] = DBus_Output[LEFT_UD];
-    DBus_Final_Output[LEFT_LR] = DBus_Output[LEFT_LR];
-    DBus_Final_Output[RIGHT_UD] = DBus_Output[RIGHT_UD];
-    DBus_Final_Output[RIGHT_LR] = DBus_Output[RIGHT_LR];
+
+    if(DBus_Output[CHANNEL_R] == CHANNEL_UP && currTime - updatetime < 500){
+      //auto mode
+      DBus_Final_Output[LEFT_UD] = ROS_Output[LEFT_UD];
+      DBus_Final_Output[LEFT_LR] = ROS_Output[LEFT_LR];
+      DBus_Final_Output[RIGHT_UD] = ROS_Output[RIGHT_UD];
+      DBus_Final_Output[RIGHT_LR] = ROS_Output[RIGHT_LR];
+      DBus_Final_Output[CHANNEL_L] = ROS_Output[CHANNEL_L];
+      DBus_Final_Output[CHANNEL_R] = CHANNEL_UP;
+    }else{
+      if (shoot!=0) DBus_Final_Output[CHANNEL_L] = shooting(0);
+      else DBus_Final_Output[CHANNEL_L] = DBus_Output[CHANNEL_L];
+      if (DBus_Output[CHANNEL_R] == CHANNEL_DOWN && shoot==0) DBus_Final_Output[CHANNEL_R] = CHANNEL_MID;
+      else DBus_Final_Output[CHANNEL_R] = CHANNEL_UP;
+      DBus_Final_Output[LEFT_UD] = DBus_Output[LEFT_UD];
+      DBus_Final_Output[LEFT_LR] = DBus_Output[LEFT_LR];
+      DBus_Final_Output[RIGHT_UD] = DBus_Output[RIGHT_UD];
+      DBus_Final_Output[RIGHT_LR] = DBus_Output[RIGHT_LR];
+    }
   }
 
   //add safety system
@@ -283,40 +296,48 @@ void write18BitsDbusData(){
     
   if(DBus_Final_Output[RIGHT_LR]>1524)
     DBus_Final_Output[RIGHT_LR]=1524;
-  if(DBus_Final_Output[LEFT_LR]>1524)
-    DBus_Final_Output[LEFT_LR]=1524;
+  //if(DBus_Final_Output[LEFT_LR]>1524)
+  //  DBus_Final_Output[LEFT_LR]=1524;
   if(DBus_Final_Output[RIGHT_UD]>1524)
     DBus_Final_Output[RIGHT_UD]=1524;
-  if(DBus_Final_Output[LEFT_UD]>1524)
-    DBus_Final_Output[LEFT_UD]=1524;
+  //if(DBus_Final_Output[LEFT_UD]>1524)
+  //  DBus_Final_Output[LEFT_UD]=1524;
   
   if(DBus_Final_Output[RIGHT_LR]<524)
     DBus_Final_Output[RIGHT_LR]=524;
-  if(DBus_Final_Output[LEFT_LR]<524)
-    DBus_Final_Output[LEFT_LR]=524;
+  //if(DBus_Final_Output[LEFT_LR]<524)
+  //  DBus_Final_Output[LEFT_LR]=524;
   if(DBus_Final_Output[RIGHT_UD]<524)
     DBus_Final_Output[RIGHT_UD]=524;
-  if(DBus_Final_Output[LEFT_UD]<524)
-    DBus_Final_Output[LEFT_UD]=524;
-  long sum = (((long)DBus_Final_Output[LEFT_LR]-1024)*((long)DBus_Final_Output[LEFT_LR]-1024)+
-  ((long)DBus_Final_Output[RIGHT_LR]-1024)*((long)DBus_Final_Output[RIGHT_LR]-1024)+
-  ((long)DBus_Final_Output[RIGHT_UD]-1024)*((long)DBus_Final_Output[RIGHT_UD]-1024)
-  );
-  if(sum>(long)480*480*2){
+  //if(DBus_Final_Output[LEFT_UD]<524)
+  //  DBus_Final_Output[LEFT_UD]=524;
+
+  int alpha=abs((long)DBus_Final_Output[LEFT_LR]-1024);
+
+  int dev=0.7*(660-alpha);
+  if (dev<0){
+    dev=0;
+  }
+  Serial.print(dev);
+  
+  int max_val=1024+dev;
+  int min_val=1024-dev;
+
+
+
+  long sum = ((long)DBus_Final_Output[RIGHT_LR]-1024)*((long)DBus_Final_Output[RIGHT_LR]-1024)+
+  ((long)DBus_Final_Output[RIGHT_UD]-1024)*((long)DBus_Final_Output[RIGHT_UD]-1024);
+  if(sum>(long)(dev*dev*2)){
     //Serial.println(sum);
-      if(DBus_Final_Output[RIGHT_LR]>1224)
-        DBus_Final_Output[RIGHT_LR]=1224;
-      if(DBus_Final_Output[LEFT_LR]>1224)
-        DBus_Final_Output[LEFT_LR]=1224;
-      if(DBus_Final_Output[RIGHT_UD]>1224)
-        DBus_Final_Output[RIGHT_UD]=1224;
+      if(DBus_Final_Output[RIGHT_LR]>max_val)
+        DBus_Final_Output[RIGHT_LR]=max_val;
+      if(DBus_Final_Output[RIGHT_UD]>max_val)
+        DBus_Final_Output[RIGHT_UD]=max_val;
       
-      if(DBus_Final_Output[RIGHT_LR]<824)
-        DBus_Final_Output[RIGHT_LR]=824;
-      if(DBus_Final_Output[LEFT_LR]<824)
-        DBus_Final_Output[LEFT_LR]=824;
-      if(DBus_Final_Output[RIGHT_UD]<824)
-        DBus_Final_Output[RIGHT_UD]=824;
+      if(DBus_Final_Output[RIGHT_LR]<min_val)
+        DBus_Final_Output[RIGHT_LR]=min_val;
+      if(DBus_Final_Output[RIGHT_UD]<min_val)
+        DBus_Final_Output[RIGHT_UD]=min_val;
   }
   
   for(i = 0;i<channel;i++){
@@ -356,17 +377,17 @@ void upload_data_display()
 void printDBUSStatus()
 {
   Serial.print("Thr ");
-  Serial.print(DBus_Output[2]);
+  Serial.print(DBus_Final_Output[2]);
   Serial.print(" Ail ");
-  Serial.print(DBus_Output[0]);
+  Serial.print(DBus_Final_Output[0]);
   Serial.print(" Ele ");
-  Serial.print(DBus_Output[1]);
+  Serial.print(DBus_Final_Output[1]);
   Serial.print(" Rud ");
-  Serial.print(DBus_Output[3]);
+  Serial.print(DBus_Final_Output[3]);
   Serial.print(" Channel1 ");
-  Serial.print(DBus_Output[5]);
+  Serial.print(DBus_Final_Output[5]);
   Serial.print(" Channel2  ");
-  Serial.print(DBus_Output[4]);
+  Serial.print(DBus_Final_Output[4]);
   Serial.print(" Stat ");
   if (dBus.Failsafe() == DBUS_SIGNAL_FAILSAFE) {
     Serial.print("FailSafe");
