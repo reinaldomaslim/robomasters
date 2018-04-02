@@ -384,16 +384,14 @@ class MissionPlanner(object):
 
         #create the path trajectories
         if self.path == 1:
-            # ref_x = self.x_plot(self.t,0,0.5,0.25)
-            # ref_y = self.y_plot(self.t,0,0.5,0.25)
+            #direction: CCW
+            #trajectory: circle 1
             ref_x = self.x_plot(self.t,0,0.55,0.55)
             ref_y = self.y_plot(self.t,0,0.55,0.55)
             if self.path_marker_done[self.path-1] == False:
                 points = []
                 for i in range(0,1000):
                     p = Point()
-                    # p.x = self.x_plot(i,0,0.5,0.25)
-                    # p.y = self.y_plot(i,0,0.5,0.25)
                     p.x = self.x_plot(i,0,0.55,0.55)
                     p.y = self.y_plot(i,0,0.55,0.55)
                     p.z = 0.0
@@ -402,16 +400,14 @@ class MissionPlanner(object):
                 self.path_marker_done[self.path-1] = True
 
         elif self.path == 2:
-            # ref_x = self.x_plot(self.t,-26,-0.45,-0.4)
-            # ref_y = self.y_plot(self.t,26,0.45,0.4)
+            #direction: CW
+            #trajectory: circle 2
             ref_x = self.x_plot(self.t,-0,-0.45,-0.45)
             ref_y = self.y_plot(self.t,0,0.45,0.45)
             if self.path_marker_done[self.path-1] == False:
                 points = []
                 for i in range(0,1000):
                     p = Point()
-                    # p.x = self.x_plot(i,-26,-0.45,-0.4)
-                    # p.y = self.y_plot(i,26,0.45,0.4)
                     p.x = self.x_plot(i,-0,-0.45,-0.45)
                     p.y = self.y_plot(i,0,0.45,0.45)
                     p.z = 0.0
@@ -420,16 +416,14 @@ class MissionPlanner(object):
                 self.path_marker_done[self.path-1] = True
 
         elif self.path == 3:
-            # ref_x = self.x_plot(self.t,-26,0.45,0.4)
-            # ref_y = self.y_plot(self.t,-26,0.45,0.4)
+            #direction: CCW
+            #trajectory: circle 3
             ref_x = self.x_plot(self.t,-0,0.6,0.6)
             ref_y = self.y_plot(self.t,-0,0.6,0.6)
             if self.path_marker_done[self.path-1] == False:
                 points = []
                 for i in range(0,1000):
                     p = Point()
-                    # p.x = self.x_plot(i,-26,0.45,0.4)
-                    # p.y = self.y_plot(i,-26,0.45,0.4)
                     p.x = self.x_plot(i,-0,0.6,0.6)
                     p.y = self.y_plot(i,-0,0.6,0.6)
                     p.z = 0.0
@@ -438,16 +432,14 @@ class MissionPlanner(object):
                 self.path_marker_done[self.path-1] = True
 
         elif self.path == 4:
-            # ref_x = self.x_plot(self.t,0,-0.5,-0.25)
-            # ref_y = self.y_plot(self.t,0,0.5,0.25)
+            #direction: CW
+            #trajectory: circle 1
             ref_x = self.x_plot(self.t,0,-0.55,-0.55)
             ref_y = self.y_plot(self.t,0,0.55,0.55)
             if self.path_marker_done[self.path-1] == False:
                 points = []
                 for i in range(0,1000):
                     p = Point()
-                    # p.x = self.x_plot(i,0,-0.5,-0.25)
-                    # p.y = self.y_plot(i,0,0.5,0.25)
                     p.x = self.x_plot(i,0,-0.55,-0.55)
                     p.y = self.y_plot(i,0,0.55,0.55)
                     p.z = 0.0
@@ -456,16 +448,14 @@ class MissionPlanner(object):
                 self.path_marker_done[self.path-1] = True
 
         elif self.path == 5:
-            # ref_x = self.x_plot(self.t,26,0.45,0.4)
-            # ref_y = self.y_plot(self.t,26,0.45,0.4)
+            #direction: CCW
+            #trajectory: circle 2
             ref_x = self.x_plot(self.t,0,0.6,0.6)
             ref_y = self.y_plot(self.t,0,0.6,0.6)
             if self.path_marker_done[self.path-1] == False:
                 points = []
                 for i in range(0,1000):
                     p = Point()
-                    # p.x = self.x_plot(i,26,0.45,0.4)
-                    # p.y = self.y_plot(i,26,0.45,0.4)
                     p.x = self.x_plot(i,0,0.6,0.6)
                     p.y = self.y_plot(i,0,0.6,0.6)
                     p.z = 0.0
@@ -474,16 +464,14 @@ class MissionPlanner(object):
                 self.path_marker_done[self.path-1] = True
 
         elif self.path == 6:
-            # ref_x = self.x_plot(self.t,26,-0.45,-0.4)
-            # ref_y = self.y_plot(self.t,-26,0.45,0.4)
+            #direction: CW
+            #trajectory: circle 3
             ref_x = self.x_plot(self.t,0,-0.5,-0.5)
             ref_y = self.y_plot(self.t,-0,0.5,0.5)
             if self.path_marker_done[self.path-1] == False:
                 points = []
                 for i in range(0,1000):
                     p = Point()
-                    # p.x = self.x_plot(i,26,-0.45,-0.4)
-                    # p.y = self.y_plot(i,-26,0.45,0.4)
                     p.x = self.x_plot(i,0,-0.5,-0.5)
                     p.y = self.y_plot(i,-0,0.5,0.5)
                     p.z = 0.0
