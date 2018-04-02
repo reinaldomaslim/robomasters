@@ -2,7 +2,7 @@
 
 """ 
 NTU MECATRON Base Robot for Robomasters 2017
-Reinaldo, Yan Pai, Tuan Anh, Emily, Asur 
+Reinaldo Maslim, Yan Pai, Tuan Anh, Emily Fatima, Albert Soerjonoto
 """
 import rospy
 import actionlib
@@ -26,7 +26,6 @@ from time import time
 class MissionPlanner(object):
 
 
-
     x0, y0, yaw0= 0, 0, 0
     enemy_pos=[]
 
@@ -45,7 +44,6 @@ class MissionPlanner(object):
     i_y = 0.1 #0.1
     d_y = 120.0 #120, 180
 
-
     x_lin_vel_thres = 660.0 # max 660
     y_lin_vel_thres=660
     ang_vel_thres = 660.0 # max 660
@@ -59,14 +57,13 @@ class MissionPlanner(object):
     lin_integral_threshold = 50.0
     ang_integral_threshold = 20.0
 
-	    #new passive dodging params
+	#new passive dodging params
     istranslate = 1
     beta=random.uniform(-math.pi, math.pi)
     direction=random.uniform(math.pi/4, math.pi/2)
     counter = 1
     start_trans=True
     yaw_counter=0
-
 
 
     # path function parameters
@@ -142,16 +139,21 @@ class MissionPlanner(object):
 
 
     def __init__(self, nodename):
-        rospy.init_node(nodename, anonymous=False)
+        
+        ## Interface of Node to the rest of ROS
+        rospy.init_node(nodename, anonymous=False) #tell rospy the node name
         print self.d_ang
+        
+        #topics to subscribe
         rospy.Subscriber("/odometry", Odometry, self.odom_callback, queue_size = 50)
         rospy.Subscriber("/enemy_yolo", Marker, self.enemy_callback, queue_size = 50)
         rospy.Subscriber('/roi', RegionOfInterest, self.armor_callback, queue_size = 50)
+        
+        #topics to publish
         self.cmd_vel_pub=rospy.Publisher("/cmd_vel", Joy, queue_size=10)
         self.pubimg = rospy.Publisher('/heatmap', Image, queue_size=1)
         self.pubpath_marker = rospy.Publisher('path_marker', Marker, queue_size=5)
         self.pubref_marker = rospy.Publisher('ref_marker', Marker, queue_size=5)
-
 
 
         # path_marker
@@ -172,7 +174,7 @@ class MissionPlanner(object):
             self.path_marker[i].color.b = 1.0
             self.path_marker[i].color.a = 1.0
 
-        #  ref_marker
+        # ref_marker
             self.ref_marker.header.stamp = rospy.get_rostime();
             self.ref_marker.header.frame_id = "odom";
             self.ref_marker.ns = "points";
@@ -188,7 +190,7 @@ class MissionPlanner(object):
 
         self.pitch_up()
 
-        rate=rospy.Rate(10)
+        rate=rospy.Rate(10) # 10hz looping
         msg=Joy()
 
 
@@ -197,28 +199,30 @@ class MissionPlanner(object):
             #self.translate(0, 0, 0)
             #self.passive_dodge()
 
+            ##rotate if necessary
             # if abs(self.yaw0-0)>heading_threshold:
             #     self.rotate(0)
             # else:
             #     #else translate to goal    
             #     self.translate(0, 0, 0)
+            
+            #dodge according to enemy
             if len(self.enemy_pos)==1:
-                 #if only one, active dodging 
+                #if only one, ACTIVE DODGING 
                 self.active_dodge()
                 if self.cmd_shoot==0:
-                    self.cmd_shoot=1
+                    self.cmd_shoot=1 #activate autoshooting
             else:
-
-                #more than one, passive dodge
+                #more than one, PASSIVE DODGING
                 #self.passive_dodge_new()
-		self.bumpy_passive()
-                self.cmd_shoot=0		
+                self.bumpy_passive()
+                self.cmd_shoot=0 #deactivate autoshooting		
 
             # msg=Joy()
             
-            #do priority that governs yawing (lidar or vision)
+            ## Do priority that governs yawing (LIDAR or vision)
             if time() - self.updatetime < 1 and ((self.state_x - self.statep_x < self.xMax/5 and self.state_y - self.statep_y < self.yMax/2) or not self.stash) and abs(self.error_x)<self.xMax/4:
-                # print("shoot")
+                #print("shoot")
                 #update time is only updated in shooting mode. armor detected
                 if self.cmd_shoot==2 and time() - self.startshoottime < 3:
                     self.cmd_x = self.bias
@@ -250,36 +254,39 @@ class MissionPlanner(object):
 
         self.stop()
 
+
     def bumpy_passive(self):
-	if self.yaw_counter<30:
-            self.cmd_yaw=int(random.uniform(1400, 1550))	
-	else:
-	    self.cmd_yaw=int(random.uniform(600, 750))
-	print(self.cmd_yaw, self.yaw_counter)
-	if self.yaw_counter>100:
-	    self.yaw_counter=0
 
-	if self.counter<10:
-	    self.cmd_x=int(random.uniform(1224, 1350))
-	    self.cmd_y=self.bias 
+        #random yawing
+        if self.yaw_counter<30:
+                self.cmd_yaw=int(random.uniform(1400, 1550))	
+        else:
+            self.cmd_yaw=int(random.uniform(600, 750))
+        print(self.cmd_yaw, self.yaw_counter)
+        if self.yaw_counter>100:
+            self.yaw_counter=0
 
-	elif self.counter<20:
-	    self.cmd_y=int(random.uniform(1200, 1324))
-	    self.cmd_x=self.bias
+        #random translating
+        if self.counter<10:
+            self.cmd_x=int(random.uniform(1224, 1350))
+            self.cmd_y=self.bias 
 
-	elif self.counter<30:
-            self.cmd_x=int(random.uniform(680, 824))
-            self.cmd_y=self.bias
-
-	elif self.counter<40:
-            self.cmd_y=int(random.uniform(680, 824))
+        elif self.counter<20:
+            self.cmd_y=int(random.uniform(1200, 1324))
             self.cmd_x=self.bias
 
+        elif self.counter<30:
+                self.cmd_x=int(random.uniform(680, 824))
+                self.cmd_y=self.bias
+
+        elif self.counter<40:
+                self.cmd_y=int(random.uniform(680, 824))
+                self.cmd_x=self.bias
+
         if self.counter>40:
-	    self.counter=0
-	
-	self.yaw_counter+=1
-	self.counter+=1
+            self.counter=0
+        self.yaw_counter+=1
+        self.counter+=1
 
     def generate_path(self):
         pass
@@ -290,7 +297,6 @@ class MissionPlanner(object):
         self.cmd_pitch=1524
         msg.buttons=[self.bias, self.bias, self.bias, int(self.cmd_pitch), 0]
 
-
     def stop(self):
         msg=Joy()
         msg.buttons = [self.bias, self.bias, self.bias, self.bias, 0]
@@ -298,7 +304,7 @@ class MissionPlanner(object):
 
     def active_dodge(self):
         
-        target=self.enemy_pos[0]
+        target=self.enemy_pos[0] #set target to the detected enemy
 
         #rotate to face target
         heading=math.atan2(target[1]-self.y0, target[0]-self.x0)
@@ -311,6 +317,7 @@ class MissionPlanner(object):
             #print("rotate")
             print(math.atan2(math.sin(self.yaw0-heading), math.cos(self.yaw0-heading))*180/math.pi)
             self.rotate(heading)
+
         else:
             
             #print("translate")
@@ -335,25 +342,29 @@ class MissionPlanner(object):
                 pred2=[self.x0+d*math.cos(beta2), self.y0+d*math.sin(beta2)]
 
 
-            heading1=math.atan2(target[1]-pred1[1], target[0]-pred1[0])
-            heading2=math.atan2(target[1]-pred2[1], target[0]-pred2[0])
-
+            #make heading predictions
+            heading1=math.atan2(target[1]-pred1[1], target[0]-pred1[0]) #direction to the left
+            heading2=math.atan2(target[1]-pred2[1], target[0]-pred2[0]) #direction to the right         
+            
+            #both directions are possible
             if self.inside_arena(pred1)==True and self.inside_arena(pred2)==True:
                 #go to preferred direction
                 if self.isleft==True:
                     self.translate(pred1[0], pred1[1], heading1)
                 else:
                     self.translate(pred2[0], pred2[1], heading2)
-
+            #only one direction is possible
             elif self.inside_arena(pred1)==True and self.inside_arena(pred2)==False:
                     self.translate(pred1[0], pred1[1], heading1)
                     self.isleft=True
             elif self.inside_arena(pred1)==False and self.inside_arena(pred2)==True:
                     self.translate(pred2[0], pred2[1], heading2)
                     self.isleft=False
+            #possibly near the edge        
             else:
                 #stuck in corner, translate to origin
                 self.translate(0, 0, self.yaw0) 
+
 
     def x_plot(self,t,Lx,Ay,Ax):
         #print("Ax      : ",Ax)
@@ -368,8 +379,10 @@ class MissionPlanner(object):
         #print("Ay      : ",Ay)
         return Ay*math.cos(2*math.pi*t*self.T_step/self.Py + self.Ly)#*math.sin(1*math.pi*t*self.T_step/self.Px + Lx)
 
+
     def passive_dodge(self):
 
+        #create the path trajectories
         if self.path == 1:
             # ref_x = self.x_plot(self.t,0,0.5,0.25)
             # ref_y = self.y_plot(self.t,0,0.5,0.25)
@@ -387,7 +400,6 @@ class MissionPlanner(object):
                     points.append(p)
                 self.path_marker[self.path-1].points = points
                 self.path_marker_done[self.path-1] = True
-
 
         elif self.path == 2:
             # ref_x = self.x_plot(self.t,-26,-0.45,-0.4)
@@ -407,7 +419,6 @@ class MissionPlanner(object):
                 self.path_marker[self.path-1].points = points
                 self.path_marker_done[self.path-1] = True
 
-
         elif self.path == 3:
             # ref_x = self.x_plot(self.t,-26,0.45,0.4)
             # ref_y = self.y_plot(self.t,-26,0.45,0.4)
@@ -425,8 +436,6 @@ class MissionPlanner(object):
                     points.append(p)
                 self.path_marker[self.path-1].points = points
                 self.path_marker_done[self.path-1] = True
-
-
 
         elif self.path == 4:
             # ref_x = self.x_plot(self.t,0,-0.5,-0.25)
@@ -446,7 +455,6 @@ class MissionPlanner(object):
                 self.path_marker[self.path-1].points = points
                 self.path_marker_done[self.path-1] = True
 
-
         elif self.path == 5:
             # ref_x = self.x_plot(self.t,26,0.45,0.4)
             # ref_y = self.y_plot(self.t,26,0.45,0.4)
@@ -464,7 +472,6 @@ class MissionPlanner(object):
                     points.append(p)
                 self.path_marker[self.path-1].points = points
                 self.path_marker_done[self.path-1] = True
-
 
         elif self.path == 6:
             # ref_x = self.x_plot(self.t,26,-0.45,-0.4)
@@ -489,23 +496,18 @@ class MissionPlanner(object):
         points.x = ref_x
         points.y = ref_y
         self.ref_marker.points = [points]
-        self.pubref_marker.publish(self.ref_marker)
+        self.pubref_marker.publish(self.ref_marker) #publish all the points
 
-
- 
         if self.t > self.counter*100:
             self.path += 1
-            self.counter += 1
-        
+            self.counter += 1        
         if self.path > 6:
             self.path = 1
-
         self.t += 1
 
         #print("Path    : ",self.path)
         #print("Time    : ",self.t)
         #print("Counter : ",self.counter)
-
         if math.sqrt(self.x0**2+self.y0**2) > 0.6:
             print("return")
             self.translate(0, 0, self.yaw0)
@@ -518,13 +520,12 @@ class MissionPlanner(object):
     def passive_dodge_new(self):
         #self.istranslate=1
         if self.istranslate%2 == 0:
-            #===========================ROTATION===============================
-            #from current position, random a direction to append radius to, limit x and y afterwards, once at the edges, add to-origin vector
+            
+            #Rotation
             d=0.3
-        
             pred=[self.x0+d*math.cos(self.beta), self.y0+d*math.sin(self.beta)]
             self.direction=random.uniform(math.pi/3,math.pi/1.5)
- 	    self.direction=((-1)**(int(self.counter/2)))*self.direction
+ 	        self.direction=((-1)**(int(self.counter/2)))*self.direction
 
             #constrain (within the absolute boundary)
             if abs(pred[0])>0.6:
@@ -544,31 +545,27 @@ class MissionPlanner(object):
 
             #escape condition           
             if self.t>self.counter*25:
-                         
                 self.beta=random.uniform(-math.pi, math.pi)
                 #self.direction=random.uniform(math.pi/3, math.pi/1.5)
                 #self.direction=((-1)**(int(self.counter/2)))*self.direction
-		self.istranslate=int(random.uniform(1, 10))
+		        self.istranslate=int(random.uniform(1, 10))
                 self.counter += 1
 
-                        
-            #==================================================================
-
         else:
-            #===========================TRANSLATION============================
-            #from current position, random a direction to append radius to, limit x and y afterwards, once at the edges, add to-origin vector
+
+            #Translation
             d=0.6
             if self.start_trans==True:
                 pred=[self.x0+d*math.cos(self.beta), self.y0+d*math.sin(self.beta)]
 
-           	#constrain (within the absolute boundary)
+           	    #constrain (within the absolute boundary)
             	if abs(pred[0])>0.7:
                     pred[0]=pred[0]*0.7/abs(pred[0])
             	if abs(pred[1])>0.7:
                     pred[1]=pred[1]*0.7/abs(pred[1])
                 
-		self.target=pred
-		self.start_trans=False
+            self.target=pred
+            self.start_trans=False
      
             if math.sqrt(self.x0**2+self.y0**2)>0.5:
                 #add to origin vector
@@ -576,6 +573,7 @@ class MissionPlanner(object):
                 #print(delta*180/math.pi)
                 self.target=[self.target[0]+0.3*math.cos(delta), self.target[1]+0.3*math.sin(delta)]
 
+            #do the translation
             self.translate(self.target[0], self.target[1], self.yaw0)
             self.t += 1
 
@@ -585,11 +583,10 @@ class MissionPlanner(object):
                 
                 #escape booleans
                 self.istranslate=int(random.uniform(1, 10))
-		self.start_trans=True
+		        self.start_trans=True
                 self.counter += 1
             
-            #==================================================================
-	print(self.counter, self.istranslate, self.direction)        
+	    print(self.counter, self.istranslate, self.direction)
 
 
     def inside_arena(self, pos):
@@ -635,28 +632,21 @@ class MissionPlanner(object):
 
         if abs(x_linear_vel)>self.x_lin_vel_thres:
             x_linear_vel=x_linear_vel*self.x_lin_vel_thres/abs(x_linear_vel)
-
         self.cmd_x = self.bias + x_linear_vel
 
         y_linear_vel = (self.p_y * y_error) + (self.d_y * y_derivative) + (self.i_y * self.y_integral)
-
         if abs(y_linear_vel)>self.y_lin_vel_thres:
             y_linear_vel=y_linear_vel*self.y_lin_vel_thres/abs(y_linear_vel)
-
         self.cmd_y = self.bias - y_linear_vel
 
         print(self.d_ang *ang_derivative)
         print(self.p_ang * ang_error)
 
         angular_vel = (self.p_ang * ang_error) + (self.d_ang * ang_derivative) + (self.i_ang * self.ang_integral)
-
-
         if abs(angular_vel)>self.ang_vel_thres:
             angular_vel=angular_vel*self.ang_vel_thres/abs(angular_vel)
 
-
         self.cmd_yaw = self.bias - angular_vel
-
         self.pre_x_error = x_error
         self.pre_y_error = y_error
         self.pre_ang_error = ang_error
@@ -674,9 +664,7 @@ class MissionPlanner(object):
             self.ang_integral = -self.ang_integral_threshold
 
         print(self.d_ang * derivative)
-        
         angular_vel = (self.p_ang * ang_error) + (self.d_ang * derivative) + (self.i_ang * self.ang_integral)
-
 
         if abs(angular_vel)>self.ang_vel_thres:
             angular_vel=angular_vel*self.ang_vel_thres/abs(angular_vel)
@@ -684,19 +672,15 @@ class MissionPlanner(object):
         self.cmd_x=self.bias
         self.cmd_y=self.bias
         self.cmd_yaw = int(self.bias - angular_vel)
-
-
         self.pre_ang_error = ang_error
 
 
-
     def enemy_callback(self, msg):
-
+        #mark enemy position
         self.enemy_pos=[]
         for point in msg.points:
             self.enemy_pos.append([point.x, point.y])
     
-
 
     def armor_callback(self, msg):
 
@@ -744,8 +728,8 @@ class MissionPlanner(object):
         self.updatetime=time()
 
 
-
     def odom_callback(self, msg):
+        #mark location of the Base
         self.x0 = msg.pose.pose.position.x
         self.y0 = msg.pose.pose.position.y
         _, _, self.yaw0 = euler_from_quaternion((msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w))
